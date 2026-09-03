@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireUser } from "@/lib/server-utils";
+import { requireUser, fetchAll } from "@/lib/server-utils";
 import type { Transaction, ManualInstrument } from "@/lib/types";
 import { toYahooSymbol, CRYPTO_ID_MAP } from "@/lib/priceFeeds";
 import {
@@ -24,12 +24,11 @@ import { computeDailyNetWorthSeries, holdingKey } from "@/lib/networthHistory";
 export async function buildNetWorthHistory() {
   const { supabase, userId } = await requireUser();
 
-  const [txnsRes, instrumentsRes] = await Promise.all([
-    supabase.from("transactions").select("*"),
+  const [transactions, instrumentsRes] = await Promise.all([
+    fetchAll<Transaction>(supabase, "transactions"),
     supabase.from("manual_instruments").select("*"),
   ]);
 
-  const transactions = (txnsRes.data ?? []) as Transaction[];
   const instruments = (instrumentsRes.data ?? []) as ManualInstrument[];
 
   if (transactions.length === 0 && instruments.length === 0) {

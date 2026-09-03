@@ -41,6 +41,7 @@ export async function parseVestedWorkbook(buffer: ArrayBuffer): Promise<ParseRes
       if (rowNumber === 1) return;
 
       const dateValue = row.getCell(1).value;
+      const name = cellText(row.getCell(3).value) || null;
       const ticker = cellText(row.getCell(4).value);
       const activity = cellText(row.getCell(5).value).toLowerCase();
       const quantity = cellNumber(row.getCell(7).value);
@@ -65,6 +66,7 @@ export async function parseVestedWorkbook(buffer: ArrayBuffer): Promise<ParseRes
         txn_date: txnDate,
         action,
         asset_ticker: ticker.toUpperCase(),
+        asset_name: name,
         isin: null,
         quantity,
         price,
@@ -105,6 +107,7 @@ export async function parseVestedWorkbook(buffer: ArrayBuffer): Promise<ParseRes
         txn_date: txnDate,
         action: "dividend",
         asset_ticker: ticker.toUpperCase(),
+        asset_name: null,
         isin: null,
         quantity: 1,
         price: amount,

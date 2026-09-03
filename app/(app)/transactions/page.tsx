@@ -1,21 +1,23 @@
 import { createClient } from "@/lib/supabase/server";
+import { fetchAll } from "@/lib/server-utils";
 import { addMember, addTransaction, deleteMember } from "@/lib/actions";
 import MfQuickAddForm from "@/components/MfQuickAddForm";
 import TransactionsLedger from "@/components/TransactionsLedger";
 import IsinResolver from "@/components/IsinResolver";
+import BackfillNamesButton from "@/components/BackfillNamesButton";
 import { findUnresolvedTickers } from "@/lib/actions-isin";
 import type { Member, Transaction } from "@/lib/types";
 
 export default async function TransactionsPage() {
   const supabase = await createClient();
 
-  const [membersRes, txnsRes] = await Promise.all([
+  const [membersRes, transactions] = await Promise.all([
     supabase.from("members").select("*").order("name"),
-    supabase.from("transactions").select("*").order("txn_date", { ascending: false }),
+    fetchAll<Transaction>(supabase, "transactions"),
   ]);
 
   const members = (membersRes.data ?? []) as Member[];
-  const transactions = (txnsRes.data ?? []) as Transaction[];
+  transactions.sort((a, b) => (a.txn_date < b.txn_date ? 1 : a.txn_date > b.txn_date ? -1 : 0));
   const unresolvedTickers = await findUnresolvedTickers();
 
   return (
@@ -213,7 +215,10 @@ export default async function TransactionsPage() {
         {transactions.length === 0 ? (
           <p className="px-3 py-4 text-sm text-ink-soft">No transactions logged yet.</p>
         ) : (
-          <TransactionsLedger transactions={transactions} members={members} />
+          <>
+            <BackfillNamesButton missingCount={transactions.filter((t) => !t.asset_name).length} />
+            <TransactionsLedger transactions={transactions} members={members} />
+          </>
         )}
       </Section>
     </div>

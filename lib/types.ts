@@ -19,6 +19,7 @@ export interface Transaction {
   platform: string;
   action: Action;
   asset_ticker: string;
+  asset_name: string | null;
   isin: string | null;
   quantity: number;
   price: number; // for dividends: total cash amount, quantity = 1 by convention

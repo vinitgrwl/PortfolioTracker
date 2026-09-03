@@ -67,6 +67,7 @@ export async function parseGrowwWorkbook(buffer: ArrayBuffer): Promise<ParseResu
     }
 
     const isin = cellText(row.getCell(col("isin")).value) || null;
+    const name = cellText(row.getCell(col("stock name")).value) || null;
     const type = cellText(row.getCell(col("type")).value).toLowerCase();
     const quantity = cellNumber(row.getCell(col("quantity")).value);
     const value = cellNumber(row.getCell(col("value")).value);
@@ -90,6 +91,7 @@ export async function parseGrowwWorkbook(buffer: ArrayBuffer): Promise<ParseResu
       txn_date: txnDate,
       action,
       asset_ticker: symbol.toUpperCase(),
+      asset_name: name,
       isin,
       quantity,
       price,

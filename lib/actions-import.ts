@@ -176,6 +176,7 @@ export async function confirmImportAction(
     platform: t.platform,
     action: t.action,
     asset_ticker: t.asset_ticker,
+    asset_name: t.asset_name,
     isin: t.isin,
     quantity: t.quantity,
     price: t.price,

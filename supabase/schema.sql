@@ -37,8 +37,8 @@ create table if not exists transactions (
   action text not null check (action in ('buy', 'sell', 'dividend')),
 
   asset_ticker text not null,           -- display symbol
+  asset_name text,                      -- company/fund display name, when known
   isin text,                            -- canonical identity key where available
-
   quantity numeric not null,            -- high precision — Vested allows fractional shares
   price numeric not null default 0,     -- per-unit price (0 for pure dividend rows)
   fiat_fees numeric not null default 0,
@@ -51,6 +51,10 @@ create table if not exists transactions (
 
   created_at timestamptz not null default now()
 );
+
+-- Table may already exist without this column (added after initial
+-- schema) — safe to run again if it's already there.
+alter table transactions add column if not exists asset_name text;
 
 alter table transactions enable row level security;
 

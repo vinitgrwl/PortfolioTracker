@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { fetchAll } from "@/lib/server-utils";
 import { computeHoldings, type Holding } from "@/lib/networth";
 import { computeXirr, buildCashflowsByCurrency } from "@/lib/xirr";
 import { computeRealizedPL, summarizeRealizedPL, summarizeDividends, type RealizedTrade } from "@/lib/realizedPL";
@@ -8,15 +9,14 @@ import type { Transaction, ManualInstrument, LatestPrice, Member } from "@/lib/t
 export default async function ReturnsPage() {
   const supabase = await createClient();
 
-  const [membersRes, txnsRes, instrumentsRes, pricesRes] = await Promise.all([
+  const [membersRes, transactions, instrumentsRes, pricesRes] = await Promise.all([
     supabase.from("members").select("*").order("name"),
-    supabase.from("transactions").select("*"),
+    fetchAll<Transaction>(supabase, "transactions"),
     supabase.from("manual_instruments").select("*"),
     supabase.from("latest_prices").select("*"),
   ]);
 
   const members = (membersRes.data ?? []) as Member[];
-  const transactions = (txnsRes.data ?? []) as Transaction[];
   const instruments = (instrumentsRes.data ?? []) as ManualInstrument[];
   const prices = (pricesRes.data ?? []) as LatestPrice[];
   const memberById = new Map(members.map((m) => [m.id, m.name]));

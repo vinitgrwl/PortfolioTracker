@@ -116,6 +116,7 @@ export async function parseAngelOneWorkbook(buffer: ArrayBuffer): Promise<ParseR
       txn_date: txnDate,
       action,
       asset_ticker: scrip, // full company name — no short symbol/ISIN in this export
+      asset_name: scrip,
       isin: null,
       quantity,
       price,

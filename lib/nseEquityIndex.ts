@@ -88,3 +88,19 @@ export async function bestNseMatch(
   const confident = name === q || name.startsWith(q) || (q.length > 6 && name.includes(q));
   return { record: top, confident };
 }
+
+/** Exact symbol match (case-insensitive) — used to backfill a company
+ *  display name for a holding we already have the NSE ticker for. */
+export async function getNseBySymbol(symbol: string): Promise<NseEquityRecord | null> {
+  const index = await getIndex();
+  const s = symbol.trim().toUpperCase();
+  return index.find((r) => r.symbol.toUpperCase() === s) ?? null;
+}
+
+/** Exact ISIN match — the more reliable of the two when both are known,
+ *  since symbols can vary slightly by exchange/series. */
+export async function getNseByIsin(isin: string): Promise<NseEquityRecord | null> {
+  const index = await getIndex();
+  const i = isin.trim().toUpperCase();
+  return index.find((r) => r.isin.toUpperCase() === i) ?? null;
+}

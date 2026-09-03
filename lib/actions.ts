@@ -53,6 +53,7 @@ export async function addTransaction(formData: FormData) {
     platform: str(formData, "platform"),
     action,
     asset_ticker: str(formData, "asset_ticker").toUpperCase(),
+    asset_name: optStr(formData, "asset_name"),
     isin: optStr(formData, "isin"),
     // dividend convention: quantity = 1, price = total cash amount
     quantity: isDividend ? 1 : num(formData, "quantity"),
@@ -108,6 +109,7 @@ export async function updateTransaction(formData: FormData) {
     platform: str(formData, "platform"),
     action,
     asset_ticker: assetClass === "Mutual Fund" ? rawTicker : rawTicker.toUpperCase(),
+    asset_name: optStr(formData, "asset_name"),
     isin: optStr(formData, "isin"),
     quantity: isDividend ? 1 : num(formData, "quantity"),
     price: isDividend ? num(formData, "dividend_amount") : num(formData, "price"),

@@ -20,6 +20,7 @@ export interface Holding {
   memberId: string;
   key: string; // ISIN or ticker::currency
   assetTicker: string;
+  assetName: string | null;
   isin: string | null;
   currency: Currency;
   country: Country;
@@ -51,6 +52,7 @@ export function computeHoldings(
     memberId: string;
     key: string;
     assetTicker: string;
+    assetName: string | null;
     isin: string | null;
     currency: Currency;
     country: Country;
@@ -72,6 +74,7 @@ export function computeHoldings(
         memberId: t.member_id,
         key,
         assetTicker: t.asset_ticker,
+        assetName: t.asset_name,
         isin: t.isin,
         currency: t.currency,
         country: t.country,
@@ -84,6 +87,7 @@ export function computeHoldings(
     }
 
     const acc = byMemberAndAsset.get(groupKey)!;
+    if (!acc.assetName && t.asset_name) acc.assetName = t.asset_name;
 
     if (t.action === "buy") {
       acc.buyQty += t.quantity;
@@ -114,6 +118,7 @@ export function computeHoldings(
       memberId: acc.memberId,
       key: acc.key,
       assetTicker: acc.assetTicker,
+      assetName: acc.assetName,
       isin: acc.isin,
       currency: acc.currency,
       country: acc.country,

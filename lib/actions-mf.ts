@@ -72,6 +72,7 @@ export async function addMfTransactionByAmount(
     platform,
     action,
     asset_ticker: scheme.schemeName,
+    asset_name: scheme.schemeName,
     isin: scheme.isin,
     quantity: units,
     price: nav,
@@ -213,6 +214,7 @@ export async function confirmMfBulkAction(
     platform: string;
     action: "buy";
     asset_ticker: string;
+    asset_name: string | null;
     isin: string | null;
     quantity: number;
     price: number;
@@ -239,6 +241,7 @@ export async function confirmMfBulkAction(
       platform,
       action: "buy",
       asset_ticker: r.schemeName!,
+      asset_name: r.schemeName!,
       isin: r.isin,
       quantity: r.amount / nav,
       price: nav,

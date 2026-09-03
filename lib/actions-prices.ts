@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireUser } from "@/lib/server-utils";
+import { requireUser, fetchAll } from "@/lib/server-utils";
 import {
   fetchYahooBatch,
   toYahooSymbol,
@@ -34,16 +34,16 @@ interface HoldingKey {
 export async function refreshLivePrices(force = false) {
   const { supabase, userId } = await requireUser();
 
-  const [txnsRes, pricesRes, rateRes] = await Promise.all([
-    supabase.from("transactions").select("asset_ticker, isin, currency, country, asset_class"),
+  const [transactions, pricesRes, rateRes] = await Promise.all([
+    fetchAll<Pick<Transaction, "asset_ticker" | "isin" | "currency" | "country" | "asset_class">>(
+      supabase,
+      "transactions",
+      "asset_ticker, isin, currency, country, asset_class"
+    ),
     supabase.from("latest_prices").select("asset_ticker, currency, updated_at"),
     supabase.from("exchange_rates").select("updated_at").eq("pair", "USD_INR").maybeSingle(),
   ]);
 
-  const transactions = (txnsRes.data ?? []) as Pick<
-    Transaction,
-    "asset_ticker" | "isin" | "currency" | "country" | "asset_class"
-  >[];
 
   const now = Date.now();
   const staleness = new Map<string, number>(); // "TICKER::CCY" -> age in ms

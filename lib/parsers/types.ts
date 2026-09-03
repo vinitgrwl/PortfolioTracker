@@ -4,6 +4,7 @@ export interface ParsedTransaction {
   txn_date: string; // YYYY-MM-DD
   action: Action;
   asset_ticker: string;
+  asset_name: string | null;
   isin: string | null;
   quantity: number;
   price: number;

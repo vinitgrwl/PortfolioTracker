@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { fetchAll } from "@/lib/server-utils";
 import { upsertPrice, deletePrice, upsertExchangeRate } from "@/lib/actions";
 import { refreshLivePrices, refreshLivePricesAction } from "@/lib/actions-prices";
 import type { LatestPrice, Transaction, ExchangeRate } from "@/lib/types";
@@ -14,14 +15,17 @@ export default async function PricesPage() {
     refreshError = e instanceof Error ? e.message : "Live price refresh failed";
   }
 
-  const [pricesRes, txnsRes, rateRes] = await Promise.all([
+  const [pricesRes, transactions, rateRes] = await Promise.all([
     supabase.from("latest_prices").select("*").order("updated_at", { ascending: false }),
-    supabase.from("transactions").select("asset_ticker, isin, currency"),
+    fetchAll<Pick<Transaction, "asset_ticker" | "isin" | "currency">>(
+      supabase,
+      "transactions",
+      "asset_ticker, isin, currency"
+    ),
     supabase.from("exchange_rates").select("*").eq("pair", "USD_INR").maybeSingle(),
   ]);
 
   const prices = (pricesRes.data ?? []) as LatestPrice[];
-  const transactions = (txnsRes.data ?? []) as Pick<Transaction, "asset_ticker" | "isin" | "currency">[];
   const rate = rateRes.data as ExchangeRate | null;
 
   const pricedKeys = new Set(prices.map((p) => `${p.asset_ticker}::${p.currency}`));

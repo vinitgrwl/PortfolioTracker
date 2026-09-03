@@ -78,6 +78,7 @@ export async function parseZerodhaWorkbook(buffer: ArrayBuffer): Promise<ParseRe
       txn_date: txnDate,
       action,
       asset_ticker: symbol.toUpperCase(),
+      asset_name: null,
       isin,
       quantity,
       price,

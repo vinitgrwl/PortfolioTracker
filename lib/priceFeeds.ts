@@ -31,6 +31,24 @@ export async function fetchYahooPrice(symbol: string): Promise<number | null> {
   }
 }
 
+/** Company/instrument display name for a US-listed symbol, from the same
+ *  Yahoo chart endpoint used for price — no separate API call needed. */
+export async function fetchYahooName(symbol: string): Promise<string | null> {
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
+      symbol
+    )}?interval=1d&range=1d`;
+    const res = await fetch(url, { headers: YAHOO_HEADERS, cache: "no-store" });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const meta = json?.chart?.result?.[0]?.meta;
+    const name = meta?.longName ?? meta?.shortName;
+    return typeof name === "string" && name.trim() ? name.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Fetches many Yahoo symbols in parallel. Returns symbol -> price (skips failures). */
 export async function fetchYahooBatch(
   symbols: string[]

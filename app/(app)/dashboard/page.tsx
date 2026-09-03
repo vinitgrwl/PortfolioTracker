@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { fetchAll } from "@/lib/server-utils";
 import { computeHoldings, computeNetWorth } from "@/lib/networth";
 import { formatINR, formatPercent } from "@/lib/format";
 import { refreshLivePrices } from "@/lib/actions-prices";
@@ -19,19 +20,19 @@ export default async function DashboardPage() {
     // ignore — dashboard should still render with whatever prices exist
   }
 
-  const [membersRes, txnsRes, instrumentsRes, pricesRes, rateRes] = await Promise.all([
+  const [membersRes, transactions, instrumentsRes, pricesRes, rateRes] = await Promise.all([
     supabase.from("members").select("*").order("name"),
-    supabase.from("transactions").select("*"),
+    fetchAll<Transaction>(supabase, "transactions"),
     supabase.from("manual_instruments").select("*"),
     supabase.from("latest_prices").select("*"),
     supabase.from("exchange_rates").select("*").eq("pair", "USD_INR").maybeSingle(),
   ]);
 
   const members = (membersRes.data ?? []) as Member[];
-  const transactions = (txnsRes.data ?? []) as Transaction[];
   const instruments = (instrumentsRes.data ?? []) as ManualInstrument[];
   const prices = (pricesRes.data ?? []) as LatestPrice[];
   const usdInrRate = rateRes.data?.rate ?? null;
+
 
   const memberById = new Map(members.map((m) => [m.id, m.name]));
 
@@ -235,7 +236,7 @@ export default async function DashboardPage() {
                 <thead>
                   <tr>
                     <th>Member</th>
-                    <th>Ticker</th>
+                    <th>Company</th>
                     <th className="text-right">Qty</th>
                     <th className="text-right">Avg cost</th>
                     <th className="text-right">Current</th>
@@ -249,7 +250,10 @@ export default async function DashboardPage() {
                     return (
                       <tr key={`${h.memberId}-${h.key}`}>
                         <td>{memberById.get(h.memberId) ?? "—"}</td>
-                        <td>{h.assetTicker}</td>
+                        <td>
+                          <div>{h.assetName || h.assetTicker}</div>
+                          {h.assetName && <div className="text-xs text-ink-soft">{h.assetTicker}</div>}
+                        </td>
                         <td className="num">{h.quantity.toLocaleString("en-IN", { maximumFractionDigits: 4 })}</td>
                         <td className="num">
                           {h.currency === "USD" ? "$" : "₹"}
