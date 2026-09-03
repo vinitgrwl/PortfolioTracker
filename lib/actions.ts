@@ -91,6 +91,45 @@ export async function deleteTransaction(formData: FormData) {
   revalidatePath("/transactions");
 }
 
+export async function updateTransaction(formData: FormData) {
+  const { supabase, userId } = await requireUser();
+
+  const id = str(formData, "id");
+  const action = str(formData, "action");
+  const assetClass = str(formData, "asset_class");
+  const isDividend = action === "dividend";
+  // Mutual Fund tickers are readable scheme names (set by the MF picker/import
+  // flow) — don't uppercase those, only free-typed stock/crypto tickers.
+  const rawTicker = str(formData, "asset_ticker");
+
+  const row = {
+    member_id: str(formData, "member_id"),
+    txn_date: str(formData, "txn_date"),
+    platform: str(formData, "platform"),
+    action,
+    asset_ticker: assetClass === "Mutual Fund" ? rawTicker : rawTicker.toUpperCase(),
+    isin: optStr(formData, "isin"),
+    quantity: isDividend ? 1 : num(formData, "quantity"),
+    price: isDividend ? num(formData, "dividend_amount") : num(formData, "price"),
+    fiat_fees: isDividend ? 0 : num(formData, "fiat_fees"),
+    currency: str(formData, "currency"),
+    country: str(formData, "country"),
+    asset_class: assetClass,
+    sector: optStr(formData, "sector"),
+    notes: optStr(formData, "notes"),
+  };
+
+  if (!id || !row.member_id || !row.txn_date || !row.platform || !row.asset_ticker) {
+    throw new Error("Missing required fields");
+  }
+
+  const { error } = await supabase.from("transactions").update(row).eq("id", id).eq("user_id", userId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/transactions");
+}
+
 // ---------------------------------------------------------------------
 // Manual instruments (FD / ULIP)
 // ---------------------------------------------------------------------
@@ -120,6 +159,40 @@ export async function addInstrument(formData: FormData) {
   }
 
   const { error } = await supabase.from("manual_instruments").insert(row);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/instruments");
+}
+
+export async function updateInstrument(formData: FormData) {
+  const { supabase, userId } = await requireUser();
+
+  const id = str(formData, "id");
+  const assetType = str(formData, "asset_type");
+
+  const row = {
+    member_id: str(formData, "member_id"),
+    asset_type: assetType,
+    label: str(formData, "label"),
+    invested_amount: num(formData, "invested_amount"),
+    rate: assetType === "FD" ? optNum(formData, "rate") : null,
+    start_date: assetType === "FD" ? optStr(formData, "start_date") : null,
+    maturity_date: assetType === "FD" ? optStr(formData, "maturity_date") : null,
+    currency: str(formData, "currency") || "INR",
+    notes: optStr(formData, "notes"),
+    updated_at: new Date().toISOString(),
+  };
+
+  if (!id || !row.member_id || !row.label || !row.invested_amount) {
+    throw new Error("Missing required fields");
+  }
+
+  const { error } = await supabase
+    .from("manual_instruments")
+    .update(row)
+    .eq("id", id)
+    .eq("user_id", userId);
   if (error) throw new Error(error.message);
 
   revalidatePath("/dashboard");

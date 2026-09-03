@@ -1,11 +1,23 @@
 import { createClient } from "@/lib/supabase/server";
 import { computeHoldings, computeNetWorth } from "@/lib/networth";
 import { formatINR, formatPercent } from "@/lib/format";
+import { refreshLivePrices } from "@/lib/actions-prices";
+import { ensureTodaySnapshot, buildNetWorthHistoryAction } from "@/lib/actions-history";
+import NetWorthTrendChart from "@/components/NetWorthTrendChart";
+import AllocationChart from "@/components/AllocationChart";
 import type { Transaction, ManualInstrument, LatestPrice, Member } from "@/lib/types";
 import Link from "next/link";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
+
+  // Best-effort auto-refresh (skips symbols priced within the last 5 min).
+  // Silent here — the Prices page is where refresh status/errors surface.
+  try {
+    await refreshLivePrices();
+  } catch {
+    // ignore — dashboard should still render with whatever prices exist
+  }
 
   const [membersRes, txnsRes, instrumentsRes, pricesRes, rateRes] = await Promise.all([
     supabase.from("members").select("*").order("name"),
@@ -38,6 +50,22 @@ export default async function DashboardPage() {
 
   const hasEquityHoldings = holdings.length > 0;
   const hasAnyValue = transactions.length > 0 || instruments.length > 0;
+
+  // Best-effort: add today's point to the trend if it's missing. Cheap —
+  // reuses the total we already computed above, no extra API calls.
+  if (hasAnyValue) {
+    try {
+      await ensureTodaySnapshot(breakdown.totalINR);
+    } catch {
+      // ignore — trend chart just won't have today's point yet
+    }
+  }
+
+  const snapshotsRes = await supabase
+    .from("net_worth_snapshots")
+    .select("snapshot_date, total_inr")
+    .order("snapshot_date", { ascending: true });
+  const snapshots = (snapshotsRes.data ?? []) as { snapshot_date: string; total_inr: number }[];
 
   return (
     <div>
@@ -84,6 +112,42 @@ export default async function DashboardPage() {
 
       {hasAnyValue && (
         <>
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm text-ink-soft">Net worth trend</h2>
+              <form action={buildNetWorthHistoryAction}>
+                <button type="submit" className="text-xs text-ink-soft underline hover:text-ink">
+                  Build Full History
+                </button>
+              </form>
+            </div>
+            <div className="bg-paper-raised border border-rule">
+              <NetWorthTrendChart data={snapshots} />
+            </div>
+            <p className="text-xs text-ink-soft mt-1">
+              &ldquo;Build Full History&rdquo; reconstructs past points from your transaction
+              ledger and historical prices — it can take a little while and only needs to be run
+              once (or after adding a lot of old transactions).
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-6 mb-8">
+            <AllocationChart
+              title="Allocation by asset type"
+              data={Object.entries(breakdown.byAssetType).map(([type, row]) => ({
+                name: type,
+                value: row.currentINR,
+              }))}
+            />
+            <AllocationChart
+              title="Allocation by country"
+              data={Object.entries(breakdown.byCountry).map(([country, row]) => ({
+                name: country,
+                value: row.currentINR,
+              }))}
+            />
+          </div>
+
           <Section title="By member">
             <table className="ledger">
               <thead>

@@ -10,6 +10,7 @@ const LINKS = [
   { href: "/transactions", label: "Transactions" },
   { href: "/instruments", label: "FDs & ULIPs" },
   { href: "/prices", label: "Prices" },
+  { href: "/returns", label: "Returns" },
 ];
 
 export default function Nav() {

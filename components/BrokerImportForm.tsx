@@ -14,11 +14,13 @@ export default function BrokerImportForm({
   parseAction,
   brokerLabel,
   hintLabel = "Statement identity",
+  accept = ".xlsx",
 }: {
   members: Member[];
   parseAction: ParseAction;
   brokerLabel: string;
   hintLabel?: string;
+  accept?: string;
 }) {
   const [parseState, dispatchParse, parsePending] = useActionState(parseAction, {
     status: "idle",
@@ -28,8 +30,8 @@ export default function BrokerImportForm({
     <div>
       <form action={dispatchParse} className="px-3 py-4 flex flex-col gap-3 max-w-md">
         <label className="block text-xs text-ink-soft">
-          {brokerLabel} export (.xlsx)
-          <input type="file" name="file" accept=".xlsx" required className="input mt-1" />
+          {brokerLabel} export ({accept})
+          <input type="file" name="file" accept={accept} required className="input mt-1" />
         </label>
         <button
           type="submit"

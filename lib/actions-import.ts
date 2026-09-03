@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUser, str } from "@/lib/server-utils";
 import { parseVestedWorkbook } from "@/lib/parsers/vested";
+import { parseVestedPdf } from "@/lib/parsers/vestedPdf";
 import { parseZerodhaWorkbook } from "@/lib/parsers/zerodha";
 import { parseGrowwWorkbook } from "@/lib/parsers/groww";
 import { parseAngelOneWorkbook } from "@/lib/parsers/angelone";
@@ -71,7 +72,46 @@ export async function parseVestedAction(
   _prevState: ImportParseState,
   formData: FormData
 ): Promise<ImportParseState> {
-  return runParse(formData, parseVestedWorkbook);
+  await requireUser();
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { status: "error", message: "Choose a file first." };
+  }
+  const name = file.name.toLowerCase();
+  if (!name.endsWith(".xlsx") && !name.endsWith(".pdf")) {
+    return { status: "error", message: "Only .xlsx or .pdf files are supported." };
+  }
+
+  try {
+    const buffer = await file.arrayBuffer();
+    const result = name.endsWith(".pdf") ? await parseVestedPdf(buffer) : await parseVestedWorkbook(buffer);
+
+    if (result.transactions.length === 0) {
+      return {
+        status: "error",
+        message:
+          result.warnings[0] ??
+          "No Buy/Sell/Dividend rows found. Make sure this is Vested's own export, unedited.",
+      };
+    }
+
+    return {
+      status: "parsed",
+      accountHint: result.accountHint,
+      transactionsJson: JSON.stringify(result.transactions),
+      count: result.transactions.length,
+      buyCount: result.transactions.filter((t) => t.action === "buy").length,
+      sellCount: result.transactions.filter((t) => t.action === "sell").length,
+      dividendCount: result.transactions.filter((t) => t.action === "dividend").length,
+      warnings: result.warnings,
+    };
+  } catch (e) {
+    return {
+      status: "error",
+      message: e instanceof Error ? e.message : "Could not read that file.",
+    };
+  }
 }
 
 export async function parseZerodhaAction(

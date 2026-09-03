@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Member } from "@/lib/types";
 import BrokerImportForm from "@/components/BrokerImportForm";
+import MfBulkImportForm from "@/components/MfBulkImportForm";
 import {
   parseVestedAction,
   parseZerodhaAction,
@@ -30,9 +31,10 @@ export default async function ImportPage() {
               parseAction={parseVestedAction}
               brokerLabel="Vested"
               hintLabel="Statement name"
+              accept=".xlsx,.pdf"
             />
             <p className="px-3 pb-4 text-xs text-ink-soft">
-              PDF fallback isn&rsquo;t wired up yet — export and upload the .xlsx from Vested.
+              Excel or the &ldquo;Account Statement&rdquo; PDF both work now.
             </p>
           </Section>
 
@@ -74,6 +76,16 @@ export default async function ImportPage() {
               captured per trade. But this export has no ISIN, only the full company name, so
               these holdings won&rsquo;t automatically merge with the same company imported from
               another broker yet.
+            </p>
+          </Section>
+          <Section title="Mutual Funds (SIP/lumpsum from your own records)">
+            <MfBulkImportForm members={members} />
+            <p className="px-3 pb-4 text-xs text-ink-soft">
+              This isn&rsquo;t a specific broker&rsquo;s export — it&rsquo;s a plain Fund
+              Name/Date/Amount sheet (e.g. built from a CAMS/KFintech statement or your own
+              records). Each row is matched to an AMFI-listed scheme; confirm or correct the
+              match before importing, since Direct/Regular and Growth/Dividend variants have
+              different NAVs.
             </p>
           </Section>
         </>

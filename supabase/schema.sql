@@ -148,3 +148,26 @@ create policy "exchange_rates_owner_all" on exchange_rates
   for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------
+-- net_worth_snapshots: one row per user per calendar day, total net
+-- worth in INR. Backfilled once from transaction history + historical
+-- prices, then extended forward by one row per day automatically.
+-- ---------------------------------------------------------------------
+create table if not exists net_worth_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+
+  snapshot_date date not null,
+  total_inr numeric not null,
+  created_at timestamptz not null default now(),
+
+  unique (user_id, snapshot_date)
+);
+
+alter table net_worth_snapshots enable row level security;
+
+create policy "net_worth_snapshots_owner_all" on net_worth_snapshots
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);

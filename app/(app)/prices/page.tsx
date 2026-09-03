@@ -1,9 +1,18 @@
 import { createClient } from "@/lib/supabase/server";
 import { upsertPrice, deletePrice, upsertExchangeRate } from "@/lib/actions";
+import { refreshLivePrices, refreshLivePricesAction } from "@/lib/actions-prices";
 import type { LatestPrice, Transaction, ExchangeRate } from "@/lib/types";
 
 export default async function PricesPage() {
   const supabase = await createClient();
+
+  // Best-effort auto-refresh (skips symbols priced within the last 5 min).
+  let refreshError: string | null = null;
+  try {
+    await refreshLivePrices();
+  } catch (e) {
+    refreshError = e instanceof Error ? e.message : "Live price refresh failed";
+  }
 
   const [pricesRes, txnsRes, rateRes] = await Promise.all([
     supabase.from("latest_prices").select("*").order("updated_at", { ascending: false }),
@@ -25,11 +34,26 @@ export default async function PricesPage() {
 
   return (
     <div>
-      <h1 className="figure-large text-2xl mb-6">Prices</h1>
-      <p className="text-sm text-ink-soft mb-6 max-w-md">
-        No live price feed is wired up yet — enter today&rsquo;s price for each holding here.
-        This is Phase 1&rsquo;s manual placeholder; a live-price pipeline comes later.
-      </p>
+      <div className="flex items-start justify-between gap-4 mb-6">
+        <div>
+          <h1 className="figure-large text-2xl mb-2">Prices</h1>
+          <p className="text-sm text-ink-soft max-w-md">
+            Stocks, crypto, mutual fund NAVs and the USD/INR rate refresh automatically
+            (at most once every 5 minutes) whenever this page loads. Anything that
+            couldn&rsquo;t be auto-matched — or isn&rsquo;t covered yet — shows up below
+            for manual entry.
+          </p>
+        </div>
+        <form action={refreshLivePricesAction}>
+          <button type="submit" className="bg-ink text-paper-raised text-sm px-4 py-2 whitespace-nowrap">
+            Refresh Now
+          </button>
+        </form>
+      </div>
+
+      {refreshError && (
+        <p className="text-xs text-loss mb-6">Live refresh hit an issue: {refreshError}</p>
+      )}
 
       <Section title="USD → INR rate">
         <form action={upsertExchangeRate} className="px-3 py-4 flex items-end gap-3">

@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { addInstrument, deleteInstrument, updateInstrumentValue } from "@/lib/actions";
-import { computeFDCurrentValue } from "@/lib/networth";
-import { formatINR } from "@/lib/format";
+import { addInstrument } from "@/lib/actions";
+import InstrumentsLedger from "@/components/InstrumentsLedger";
 import type { Member, ManualInstrument } from "@/lib/types";
 
 export default async function InstrumentsPage() {
@@ -14,8 +13,6 @@ export default async function InstrumentsPage() {
 
   const members = (membersRes.data ?? []) as Member[];
   const instruments = (instrumentsRes.data ?? []) as ManualInstrument[];
-  const memberById = new Map(members.map((m) => [m.id, m.name]));
-
   return (
     <div>
       <h1 className="figure-large text-2xl mb-6">FDs &amp; ULIPs</h1>
@@ -103,75 +100,7 @@ export default async function InstrumentsPage() {
         {instruments.length === 0 ? (
           <p className="px-3 py-4 text-sm text-ink-soft">None added yet.</p>
         ) : (
-          <div className="divide-y divide-rule">
-            {instruments.map((inst) => (
-              <div key={inst.id} className="px-3 py-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-sm">
-                      {inst.label}{" "}
-                      <span className="text-ink-soft text-xs">
-                        · {memberById.get(inst.member_id) ?? "—"} · {inst.asset_type}
-                      </span>
-                    </div>
-                    <div className="text-xs text-ink-soft mt-0.5">
-                      Invested {formatINR(inst.invested_amount)}
-                      {inst.asset_type === "FD" && inst.rate !== null && inst.start_date && (
-                        <>
-                          {" "}
-                          · {inst.rate}% · since {inst.start_date}
-                          {inst.maturity_date ? ` · matures ${inst.maturity_date}` : ""}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <form action={deleteInstrument}>
-                    <input type="hidden" name="id" value={inst.id} />
-                    <button type="submit" className="text-ink-soft hover:text-loss text-xs shrink-0">
-                      Remove
-                    </button>
-                  </form>
-                </div>
-
-                {inst.asset_type === "FD" ? (
-                  <div className="figure-large text-lg mt-2">
-                    {inst.rate !== null && inst.start_date
-                      ? formatINR(
-                          computeFDCurrentValue(
-                            inst.invested_amount,
-                            inst.rate,
-                            inst.start_date,
-                            inst.maturity_date
-                          )
-                        )
-                      : formatINR(inst.invested_amount)}
-                    <span className="text-xs text-ink-soft font-sans ml-2">current value</span>
-                  </div>
-                ) : (
-                  <form action={updateInstrumentValue} className="mt-3 flex items-end gap-2">
-                    <input type="hidden" name="id" value={inst.id} />
-                    <Field label="Update current value">
-                      <input
-                        type="number"
-                        step="any"
-                        name="current_value"
-                        defaultValue={inst.current_value ?? undefined}
-                        className="input w-40"
-                      />
-                    </Field>
-                    <button type="submit" className="bg-ink text-paper-raised text-sm px-3 py-1.5">
-                      Save
-                    </button>
-                    {inst.current_value_updated_at && (
-                      <span className="text-xs text-ink-soft mb-1.5">
-                        updated {new Date(inst.current_value_updated_at).toLocaleDateString("en-IN")}
-                      </span>
-                    )}
-                  </form>
-                )}
-              </div>
-            ))}
-          </div>
+          <InstrumentsLedger instruments={instruments} members={members} />
         )}
       </Section>
     </div>

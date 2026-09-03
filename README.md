@@ -2,10 +2,16 @@
 
 Build sequence per the blueprint:
 1. ✅ Data model + manual entry (validates dashboard/net-worth math end-to-end)
-2. ✅ Vested import, end-to-end (Excel only — PDF fallback not yet built)
+2. ✅ Vested import, end-to-end (Excel and PDF)
 3. 🔶 Broker parsers — Vested, Zerodha, Groww, AngelOne done; Dhan pending
 4. ✅ FD/ULIP modules (built ahead of schedule, alongside step 1)
-5. ⏳ FY-wise Realized P&L report
+5. ✅ FY-wise Realized P&L report (FIFO, STCG/LTCG/VDA split)
+6. ✅ Live price fetching (Yahoo/CoinGecko/AMFI, auto + manual refresh)
+7. ✅ Net worth trend + allocation charts (daily historical backfill)
+8. ✅ Mutual fund fund-picker + bulk import (name search, auto-NAV)
+9. ✅ Company Name → ISIN resolver (merges AngelOne holdings with other brokers)
+10. ✅ Transaction/instrument edit-in-place
+11. ✅ Portfolio XIRR (per member, per currency)
 
 Stack: Next.js (App Router) + Supabase (Postgres + Auth), Tailwind v4. Same
 pattern as Memora's account-based build, but this is a fully separate app —
@@ -56,13 +62,7 @@ no shared code or data.
 
 ## Not built yet (later phases, per the blueprint)
 
-- Vested PDF fallback import (Excel-only for now)
 - Dhan import parser (sample not yet available)
-- FIFO-based realized P&L / FY-wise capital gains
-- Live price fetching (equity/crypto APIs)
-- Company-Name → ISIN lookup — needed so AngelOne holdings merge with the
-  same company imported from a broker that does give ISIN
-- Editing a transaction/instrument after it's added (delete-and-re-add only, for now)
 
 ## A note on the `xlsx` npm package
 

@@ -1,7 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
-import { addMember, addTransaction, deleteTransaction, deleteMember } from "@/lib/actions";
+import { addMember, addTransaction, deleteMember } from "@/lib/actions";
+import MfQuickAddForm from "@/components/MfQuickAddForm";
+import TransactionsLedger from "@/components/TransactionsLedger";
+import IsinResolver from "@/components/IsinResolver";
+import { findUnresolvedTickers } from "@/lib/actions-isin";
 import type { Member, Transaction } from "@/lib/types";
-import { formatQty } from "@/lib/format";
 
 export default async function TransactionsPage() {
   const supabase = await createClient();
@@ -13,7 +16,7 @@ export default async function TransactionsPage() {
 
   const members = (membersRes.data ?? []) as Member[];
   const transactions = (txnsRes.data ?? []) as Transaction[];
-  const memberById = new Map(members.map((m) => [m.id, m.name]));
+  const unresolvedTickers = await findUnresolvedTickers();
 
   return (
     <div>
@@ -124,7 +127,6 @@ export default async function TransactionsPage() {
                 <option value="Stock">Stock</option>
                 <option value="ETF">ETF</option>
                 <option value="Crypto">Crypto</option>
-                <option value="Mutual Fund">Mutual Fund</option>
               </select>
             </Field>
 
@@ -176,10 +178,34 @@ export default async function TransactionsPage() {
               </button>
               <p className="text-xs text-ink-soft mt-2">
                 For a Dividend row, leave Quantity and Price/unit blank and use the Dividend
-                amount field instead.
+                amount field instead. For Mutual Funds, use the dedicated form below instead —
+                it looks up the fund and NAV for you.
               </p>
             </div>
           </form>
+        </Section>
+      )}
+
+      {members.length > 0 && (
+        <Section title="Log a mutual fund">
+          <p className="px-3 pt-3 text-xs text-ink-soft">
+            Search the fund, pick a date and enter how much you invested — the NAV for that date
+            is fetched automatically and units are calculated for you.
+          </p>
+          <MfQuickAddForm members={members} />
+          <p className="px-3 pb-3 text-xs text-ink-soft">
+            Have a list of many SIP/lumpsum entries? Use{" "}
+            <a href="/import" className="underline">
+              the bulk import
+            </a>{" "}
+            on the Import page instead.
+          </p>
+        </Section>
+      )}
+
+      {unresolvedTickers.length > 0 && (
+        <Section title={`Fix missing ISINs (${unresolvedTickers.length})`}>
+          <IsinResolver tickers={unresolvedTickers} />
         </Section>
       )}
 
@@ -187,44 +213,7 @@ export default async function TransactionsPage() {
         {transactions.length === 0 ? (
           <p className="px-3 py-4 text-sm text-ink-soft">No transactions logged yet.</p>
         ) : (
-          <table className="ledger">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Member</th>
-                <th>Ticker</th>
-                <th>Action</th>
-                <th className="text-right">Qty</th>
-                <th className="text-right">Price</th>
-                <th>Platform</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {transactions.map((t) => (
-                <tr key={t.id}>
-                  <td className="whitespace-nowrap">{t.txn_date}</td>
-                  <td>{memberById.get(t.member_id) ?? "—"}</td>
-                  <td>{t.asset_ticker}</td>
-                  <td className="capitalize">{t.action}</td>
-                  <td className="num">{t.action === "dividend" ? "—" : formatQty(t.quantity)}</td>
-                  <td className="num">
-                    {t.currency === "USD" ? "$" : "₹"}
-                    {t.price}
-                  </td>
-                  <td>{t.platform}</td>
-                  <td>
-                    <form action={deleteTransaction}>
-                      <input type="hidden" name="id" value={t.id} />
-                      <button type="submit" className="text-ink-soft hover:text-loss text-xs">
-                        Remove
-                      </button>
-                    </form>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <TransactionsLedger transactions={transactions} members={members} />
         )}
       </Section>
     </div>
