@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { requireUser, str } from "@/lib/server-utils";
 import { parseVestedWorkbook } from "@/lib/parsers/vested";
-import { parseVestedPdf } from "@/lib/parsers/vestedPdf";
 import { parseZerodhaWorkbook } from "@/lib/parsers/zerodha";
 import { parseGrowwWorkbook } from "@/lib/parsers/groww";
 import { parseAngelOneWorkbook } from "@/lib/parsers/angelone";
@@ -85,7 +84,9 @@ export async function parseVestedAction(
 
   try {
     const buffer = await file.arrayBuffer();
-    const result = name.endsWith(".pdf") ? await parseVestedPdf(buffer) : await parseVestedWorkbook(buffer);
+    const result = name.endsWith(".pdf")
+      ? await (await import("@/lib/parsers/vestedPdf")).parseVestedPdf(buffer)
+      : await parseVestedWorkbook(buffer);
 
     if (result.transactions.length === 0) {
       return {
