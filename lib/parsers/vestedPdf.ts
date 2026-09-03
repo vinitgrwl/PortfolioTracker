@@ -1,6 +1,16 @@
 import { PDFParse } from "pdf-parse";
 import type { ParsedTransaction, ParseResult } from "./types";
 
+// pdfjs-dist (used internally by pdf-parse) expects browser globals like
+// DOMMatrix for text-positioning math on some PDF layouts. Node has no
+// built-in DOMMatrix, so we polyfill it from @napi-rs/canvas — already a
+// dependency of pdf-parse, not an extra install — before any parsing runs.
+if (typeof (globalThis as { DOMMatrix?: unknown }).DOMMatrix === "undefined") {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { DOMMatrix } = require("@napi-rs/canvas");
+  (globalThis as { DOMMatrix?: unknown }).DOMMatrix = DOMMatrix;
+}
+
 /**
  * Parses Vested's PDF "Account Statement" export (the fallback for people
  * who only have the PDF, not the Excel export parsed by vested.ts).
