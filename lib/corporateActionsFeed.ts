@@ -32,11 +32,13 @@ export async function fetchYahooSplits(symbol: string): Promise<FetchedAction[]>
   try {
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
       symbol
-    )}?interval=1mo&range=max&events=split`;
+    )}?interval=1mo&range=max&events=div,splits`;
     const res = await fetch(url, { headers: YAHOO_HEADERS, cache: "no-store" });
     if (!res.ok) return [];
     const json = await res.json();
-    const splits = json?.chart?.result?.[0]?.events?.split;
+    // Yahoo's response key is "splits" (plural) even though the query
+    // param is "split" (singular) — a known inconsistency in their API.
+    const splits = json?.chart?.result?.[0]?.events?.splits ?? json?.chart?.result?.[0]?.events?.split;
     if (!splits || typeof splits !== "object") return [];
 
     const out: FetchedAction[] = [];
