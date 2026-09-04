@@ -7,6 +7,7 @@ import type { CompanyEvent } from "@/lib/types";
 export default function CompanyEventsManager({ events }: { events: CompanyEvent[] }) {
   const [showForm, setShowForm] = useState(false);
   const [eventType, setEventType] = useState<"rename" | "merger">("rename");
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <div>
@@ -27,11 +28,18 @@ export default function CompanyEventsManager({ events }: { events: CompanyEvent[
         </button>
       </div>
 
+      {error && <p className="px-3 py-2 text-xs text-loss border-b border-rule">{error}</p>}
+
       {showForm && (
         <form
           action={async (fd) => {
-            await addCompanyEvent(fd);
-            setShowForm(false);
+            setError(null);
+            try {
+              await addCompanyEvent(fd);
+              setShowForm(false);
+            } catch (e) {
+              setError(e instanceof Error ? e.message : "Could not save that event.");
+            }
           }}
           className="px-3 py-3 border-b border-rule grid grid-cols-2 md:grid-cols-4 gap-2 items-end"
         >

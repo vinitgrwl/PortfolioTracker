@@ -37,7 +37,9 @@ export async function addCompanyEvent(formData: FormData) {
     throw new Error("Missing required fields");
   }
 
-  const { error } = await supabase.from("company_events").insert(row);
+  const { error } = await supabase
+    .from("company_events")
+    .upsert(row, { onConflict: "user_id,old_ticker,old_country,effective_date" });
   if (error) throw new Error(error.message);
 
   revalidatePath("/dashboard");

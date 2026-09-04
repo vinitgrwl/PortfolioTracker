@@ -47,12 +47,18 @@ export default function MissingPricesList({ missing }: { missing: MissingEntry[]
 
 function MiniEventForm({ entry, onDone }: { entry: MissingEntry; onDone: () => void }) {
   const [eventType, setEventType] = useState<"rename" | "merger">("rename");
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <form
       action={async (fd) => {
-        await addCompanyEvent(fd);
-        onDone();
+        setError(null);
+        try {
+          await addCompanyEvent(fd);
+          onDone();
+        } catch (e) {
+          setError(e instanceof Error ? e.message : "Could not save that event.");
+        }
       }}
       className="mt-2 p-3 border border-rule bg-paper-raised flex flex-wrap gap-2 items-end max-w-md"
     >
@@ -105,6 +111,8 @@ function MiniEventForm({ entry, onDone }: { entry: MissingEntry; onDone: () => v
         For a buyout for cash (company went private), don&rsquo;t log an event here — go log a normal Sell
         transaction instead.
       </div>
+
+      {error && <p className="w-full text-xs text-loss">{error}</p>}
 
       <button type="submit" className="bg-ink text-paper-raised text-sm px-4 py-1.5">
         Save

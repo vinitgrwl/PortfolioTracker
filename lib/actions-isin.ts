@@ -54,6 +54,85 @@ export async function findUnresolvedTickers(): Promise<UnresolvedTicker[]> {
   );
 }
 
+export interface IsinConflict {
+  ticker: string;
+  country: "India" | "United States";
+  isins: { isin: string; count: number }[]; // each distinct ISIN currently on this ticker, and how many rows
+  noIsinCount: number;
+}
+
+/**
+ * Finds tickers where rows disagree on ISIN — more than one distinct
+ * non-null ISIN recorded for the same ticker+country. Unlike a missing
+ * ISIN (findUnresolvedTickers/resolveIsinAction), this is what actually
+ * splits one real holding into multiple groups even after backfilling:
+ * the identity rule prefers ISIN when present, so two different ISINs
+ * on the same stock never merge on their own.
+ */
+export async function findIsinConflicts(): Promise<IsinConflict[]> {
+  const { supabase } = await requireUser();
+
+  const { data } = await supabase
+    .from("transactions")
+    .select("asset_ticker, country, isin")
+    .in("asset_class", ["Stock", "ETF"]);
+
+  const byKey = new Map<string, { ticker: string; country: "India" | "United States"; isinCounts: Map<string, number>; noIsinCount: number }>();
+  for (const row of data ?? []) {
+    const key = `${row.asset_ticker.trim().toUpperCase()}::${row.country}`;
+    if (!byKey.has(key)) {
+      byKey.set(key, { ticker: row.asset_ticker, country: row.country, isinCounts: new Map(), noIsinCount: 0 });
+    }
+    const g = byKey.get(key)!;
+    const isin = row.isin?.trim();
+    if (isin) {
+      g.isinCounts.set(isin, (g.isinCounts.get(isin) ?? 0) + 1);
+    } else {
+      g.noIsinCount += 1;
+    }
+  }
+
+  const conflicts: IsinConflict[] = [];
+  for (const g of byKey.values()) {
+    if (g.isinCounts.size < 2) continue; // only one (or zero) distinct ISIN — not a conflict
+    conflicts.push({
+      ticker: g.ticker,
+      country: g.country,
+      isins: Array.from(g.isinCounts.entries()).map(([isin, count]) => ({ isin, count })),
+      noIsinCount: g.noIsinCount,
+    });
+  }
+  return conflicts;
+}
+
+/** Normalizes every row for a ticker+country to one chosen ISIN —
+ *  including rows that already have a DIFFERENT isin recorded, which
+ *  resolveIsinAction (missing-ISIN only) deliberately leaves alone. */
+export async function resolveIsinConflict(formData: FormData) {
+  const { supabase, userId } = await requireUser();
+
+  const ticker = str(formData, "ticker");
+  const country = str(formData, "country");
+  const isin = str(formData, "isin");
+
+  if (!ticker || !country || !isin) throw new Error("Missing required fields");
+
+  const { error } = await supabase
+    .from("transactions")
+    .update({ isin })
+    .eq("user_id", userId)
+    .eq("asset_ticker", ticker)
+    .eq("country", country);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/transactions");
+  revalidatePath("/returns");
+  revalidatePath("/rebalancing");
+  revalidatePath("/sector-wise");
+  revalidatePath("/screener");
+}
+
 export type ResolveIsinState =
   | { status: "idle" }
   | { status: "error"; message: string }

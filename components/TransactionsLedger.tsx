@@ -172,6 +172,7 @@ export default function TransactionsLedger({
                 <td>
                   <div>{t.asset_name || t.asset_ticker}</div>
                   {t.asset_name && <div className="text-xs text-ink-soft">{t.asset_ticker}</div>}
+                  <div className="text-xs text-ink-soft">{t.isin ?? "no ISIN"}</div>
                 </td>
                 <td className="capitalize">{t.action}</td>
                 <td className="num">{t.action === "dividend" ? "—" : formatQty(t.quantity)}</td>
