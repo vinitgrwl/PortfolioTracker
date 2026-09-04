@@ -246,3 +246,55 @@ export async function fetchAmfiNavMap(): Promise<Map<string, number>> {
   }
   return map;
 }
+
+// ----------------------------- Company snapshot -----------------------------
+// Yahoo's quoteSummary endpoint — used only by the Stock Screener for
+// market cap / P-E / sector / volume. Unlike the chart endpoint (used
+// everywhere else in this app and proven reliable), quoteSummary has
+// tightened its anti-bot requirements over the past couple of years and
+// can be blocked or return partial data even when the chart endpoint
+// works fine for the same symbol — genuinely best-effort, more so than
+// the rest of this file. Any field it can't get comes back null and the
+// screener just shows "—" for it.
+
+export interface CompanySnapshot {
+  marketCap: number | null;
+  peRatio: number | null;
+  volume: number | null;
+  sector: string | null;
+  beta: number | null;
+  eps: number | null;
+  fiftyTwoWeekHigh: number | null;
+  fiftyTwoWeekLow: number | null;
+}
+
+export async function fetchYahooCompanySnapshot(symbol: string): Promise<CompanySnapshot | null> {
+  try {
+    const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(
+      symbol
+    )}?modules=summaryDetail,defaultKeyStatistics,assetProfile`;
+    const res = await fetch(url, { headers: YAHOO_HEADERS, cache: "no-store" });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const result = json?.quoteSummary?.result?.[0];
+    if (!result) return null;
+
+    const summary = result.summaryDetail ?? {};
+    const stats = result.defaultKeyStatistics ?? {};
+    const profile = result.assetProfile ?? {};
+    const raw = (field: { raw?: number } | undefined) => (typeof field?.raw === "number" ? field.raw : null);
+
+    return {
+      marketCap: raw(summary.marketCap),
+      peRatio: raw(summary.trailingPE),
+      volume: raw(summary.volume),
+      sector: typeof profile.sector === "string" ? profile.sector : null,
+      beta: raw(summary.beta),
+      eps: raw(stats.trailingEps),
+      fiftyTwoWeekHigh: raw(summary.fiftyTwoWeekHigh),
+      fiftyTwoWeekLow: raw(summary.fiftyTwoWeekLow),
+    };
+  } catch {
+    return null;
+  }
+}

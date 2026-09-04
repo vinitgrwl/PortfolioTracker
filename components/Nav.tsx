@@ -15,6 +15,7 @@ const LINKS = [
   { href: "/rebalancing", label: "Rebalancing" },
   { href: "/sector-wise", label: "Sector" },
   { href: "/invested-per-month", label: "Monthly" },
+  { href: "/screener", label: "Screener" },
   { href: "/returns", label: "Returns" },
 ];
 

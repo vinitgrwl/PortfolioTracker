@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireUser, fetchAll } from "@/lib/server-utils";
-import type { Transaction, ManualInstrument } from "@/lib/types";
+import type { Transaction, ManualInstrument, CompanyEvent } from "@/lib/types";
 import { toYahooSymbol, CRYPTO_ID_MAP } from "@/lib/priceFeeds";
 import {
   fetchYahooHistoryBatch,
@@ -24,9 +24,10 @@ import { computeDailyNetWorthSeries, holdingKey } from "@/lib/networthHistory";
 export async function buildNetWorthHistory() {
   const { supabase, userId } = await requireUser();
 
-  const [transactions, instrumentsRes] = await Promise.all([
+  const [transactions, instrumentsRes, companyEvents] = await Promise.all([
     fetchAll<Transaction>(supabase, "transactions"),
     supabase.from("manual_instruments").select("*"),
+    fetchAll<CompanyEvent>(supabase, "company_events"),
   ]);
 
   const instruments = (instrumentsRes.data ?? []) as ManualInstrument[];
@@ -65,6 +66,24 @@ export async function buildNetWorthHistory() {
         currency: t.currency,
         country: t.country,
         assetClass: t.asset_class,
+      });
+    }
+  }
+
+  // Company events (renames/mergers) can point at a ticker the user never
+  // personally traded (the merged-into company) — seed it here too so its
+  // price history gets fetched, or computeDailyNetWorthSeries's transfer
+  // has nothing to price the moved quantity with.
+  for (const ev of companyEvents) {
+    const currency = ev.new_country === "India" ? "INR" : "USD";
+    const key = ev.new_isin?.trim() ? ev.new_isin.trim() : `${ev.new_ticker}::${currency}`;
+    if (!holdings.has(key)) {
+      holdings.set(key, {
+        ticker: ev.new_ticker,
+        isin: ev.new_isin,
+        currency,
+        country: ev.new_country,
+        assetClass: "Stock",
       });
     }
   }
@@ -134,7 +153,14 @@ export async function buildNetWorthHistory() {
 
   const usdInrSeries = new ForwardFiller(yahooHistories.get("INR=X") ?? new Map());
 
-  const series = computeDailyNetWorthSeries(transactions, instruments, dates, priceSeriesByHolding, usdInrSeries);
+  const series = computeDailyNetWorthSeries(
+    transactions,
+    instruments,
+    dates,
+    priceSeriesByHolding,
+    usdInrSeries,
+    companyEvents
+  );
 
   const rows = series.map((p) => ({
     user_id: userId,
