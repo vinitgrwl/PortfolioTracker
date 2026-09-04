@@ -14,8 +14,8 @@ export default function CorporateActionsManager({ actions }: { actions: Corporat
       <div className="px-3 py-3 border-b border-rule bg-paper flex items-center justify-between gap-3 flex-wrap">
         <p className="text-xs text-ink-soft">
           Splits and bonus issues, applied automatically to holdings and realized P&amp;L by date. US tickers
-          auto-fetch reliably via Yahoo Finance; India tickers are best-effort (NSE blocks a lot of automated
-          requests) — add those manually if auto-fetch comes up empty.
+          auto-fetch reliably via Yahoo Finance. India tickers try NSE first, then Yahoo Finance as a
+          fallback for splits only (bonus issues aren&apos;t on Yahoo) — add those manually if both come up empty.
         </p>
         <div className="flex gap-2 shrink-0">
           <button
@@ -25,7 +25,11 @@ export default function CorporateActionsManager({ actions }: { actions: Corporat
               startTransition(async () => {
                 const res = await autoFetchCorporateActions();
                 const indiaNote = res.indiaAttempted
-                  ? ` (India auto-fetch found ${res.indiaFound} — add manually for tickers it missed.)`
+                  ? ` (India: NSE found ${res.indiaFound}${
+                      res.indiaFallbackUsed > 0
+                        ? `, Yahoo fallback caught ${res.indiaFallbackUsed} more split(s) NSE missed`
+                        : ""
+                    } — add manually for tickers still missed.)`
                   : "";
                 setResult(`Checked ${res.checked} securities, added ${res.added} new action(s).${indiaNote}`);
               })

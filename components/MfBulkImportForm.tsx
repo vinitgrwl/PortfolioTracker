@@ -89,7 +89,11 @@ function MfBulkPreview({
       <div className="px-3 pb-4">
         <div className="bg-paper-raised border border-gain text-sm px-4 py-3 max-w-md">
           Imported {confirmState.count} transactions
-          {confirmState.skipped > 0 ? ` (${confirmState.skipped} skipped — no fund matched or no NAV found)` : ""}.
+          {confirmState.skipped > 0 ? ` (${confirmState.skipped} skipped — no fund matched or no NAV found)` : ""}
+          {confirmState.duplicateCount > 0
+            ? ` — ${confirmState.duplicateCount} duplicate${confirmState.duplicateCount === 1 ? "" : "s"} already in the ledger for this member were skipped`
+            : ""}
+          .
         </div>
       </div>
     );

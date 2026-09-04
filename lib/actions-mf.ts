@@ -1,10 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireUser, str, num, optStr } from "@/lib/server-utils";
+import { requireUser, str, num, optStr, fetchAll } from "@/lib/server-utils";
 import { searchMfSchemes, bestMfMatch, getSchemeByCode, type MfSchemeRecord } from "@/lib/mfSchemes";
 import { fetchMfApiHistory, ForwardFiller } from "@/lib/historicalPrices";
 import { parseMfBulkWorkbook } from "@/lib/parsers/mfBulk";
+import { transactionFingerprint } from "@/lib/txnFingerprint";
 
 // ---------------------------------------------------------------------
 // Search — used directly (not as a form action) by the MfSchemePicker
@@ -172,7 +173,7 @@ export async function parseMfBulkAction(
 export type MfBulkConfirmState =
   | { status: "idle" }
   | { status: "error"; message: string }
-  | { status: "done"; count: number; skipped: number };
+  | { status: "done"; count: number; skipped: number; duplicateCount: number };
 
 export async function confirmMfBulkAction(
   _prevState: MfBulkConfirmState,
@@ -226,7 +227,24 @@ export async function confirmMfBulkAction(
     notes: null;
   }[] = [];
 
+  // Dedup against this member's existing ledger — same purpose as the
+  // broker-import fix: catches the same MF sheet (or an overlapping range
+  // of it) being uploaded twice.
+  const existing = await fetchAll<{
+    platform: string;
+    asset_ticker: string;
+    isin: string | null;
+    txn_date: string;
+    action: string;
+    quantity: number;
+    price: number;
+  }>(supabase, "transactions", "platform, asset_ticker, isin, txn_date, action, quantity, price", (q) =>
+    q.eq("member_id", memberId)
+  );
+  const seen = new Set(existing.map((t) => transactionFingerprint({ ...t, member_id: memberId })));
+
   let navMissing = 0;
+  let duplicateCount = 0;
   for (const r of matched) {
     const filler = historyByCode.get(r.schemeCode!);
     const nav = filler?.valueAt(r.txn_date);
@@ -234,6 +252,22 @@ export async function confirmMfBulkAction(
       navMissing += 1;
       continue;
     }
+    const quantity = r.amount / nav;
+    const fp = transactionFingerprint({
+      member_id: memberId,
+      platform,
+      asset_ticker: r.schemeName!,
+      isin: r.isin,
+      txn_date: r.txn_date,
+      action: "buy",
+      quantity,
+      price: nav,
+    });
+    if (seen.has(fp)) {
+      duplicateCount += 1;
+      continue;
+    }
+    seen.add(fp);
     insertRows.push({
       user_id: userId,
       member_id: memberId,
@@ -243,7 +277,7 @@ export async function confirmMfBulkAction(
       asset_ticker: r.schemeName!,
       asset_name: r.schemeName!,
       isin: r.isin,
-      quantity: r.amount / nav,
+      quantity,
       price: nav,
       fiat_fees: 0,
       currency: "INR",
@@ -255,7 +289,13 @@ export async function confirmMfBulkAction(
   }
 
   if (insertRows.length === 0) {
-    return { status: "error", message: "None of the matched rows had a usable NAV — nothing imported." };
+    return {
+      status: "error",
+      message:
+        duplicateCount > 0
+          ? `All matched rows were already in the ledger (${duplicateCount} duplicate${duplicateCount === 1 ? "" : "s"}) — nothing new to import.`
+          : "None of the matched rows had a usable NAV — nothing imported.",
+    };
   }
 
   const { error } = await supabase.from("transactions").insert(insertRows);
@@ -265,5 +305,5 @@ export async function confirmMfBulkAction(
   revalidatePath("/transactions");
   revalidatePath("/import");
 
-  return { status: "done", count: insertRows.length, skipped: skipped + navMissing };
+  return { status: "done", count: insertRows.length, skipped: skipped + navMissing, duplicateCount };
 }

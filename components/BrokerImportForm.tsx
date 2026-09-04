@@ -92,7 +92,11 @@ function PreviewAndConfirm({
     return (
       <div className="px-3 pb-4">
         <div className="bg-paper-raised border border-gain text-sm px-4 py-3 max-w-md">
-          Imported {importState.count} transactions. Set current prices for these tickers on the{" "}
+          Imported {importState.count} transactions
+          {importState.duplicateCount > 0 && (
+            <> — skipped {importState.duplicateCount} already in the ledger for this member.</>
+          )}
+          {importState.duplicateCount === 0 && "."} Set current prices for these tickers on the{" "}
           <a href="/prices" className="underline">
             Prices page
           </a>{" "}

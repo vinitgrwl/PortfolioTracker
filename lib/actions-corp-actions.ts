@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireUser, fetchAll, str, num } from "@/lib/server-utils";
-import { fetchYahooSplits, fetchNseCorporateActions } from "@/lib/corporateActionsFeed";
+import { fetchYahooSplits, fetchNseCorporateActions, type FetchedAction } from "@/lib/corporateActionsFeed";
 import { toYahooSymbol } from "@/lib/priceFeeds";
 import type { Transaction, CorporateAction } from "@/lib/types";
 
@@ -51,15 +51,19 @@ export interface AutoFetchResult {
   checked: number;
   indiaAttempted: boolean;
   indiaFound: number;
+  indiaFallbackUsed: number;
 }
 
 /**
  * Best-effort auto-fetch across every distinct security the family
  * currently (or ever) held. US tickers go through Yahoo Finance's split
  * events (reliable). India tickers go through NSE's corporate-actions
- * API (best-effort — see lib/corporateActionsFeed.ts for why this can
- * come back empty even for a stock that really did split or bonus).
- * Duplicates are skipped via the table's unique constraint.
+ * API first (best-effort — see lib/corporateActionsFeed.ts for why this
+ * can come back empty even for a stock that really did split or bonus);
+ * when NSE comes back empty, Yahoo's split events are tried as a second
+ * source (via the .NS symbol) — this only ever catches splits, not bonus
+ * issues, since Yahoo doesn't track those. Duplicates are skipped via
+ * the table's unique constraint.
  */
 export async function autoFetchCorporateActions(): Promise<AutoFetchResult> {
   const { supabase, userId } = await requireUser();
@@ -80,18 +84,26 @@ export async function autoFetchCorporateActions(): Promise<AutoFetchResult> {
   let added = 0;
   let indiaAttempted = false;
   let indiaFound = 0;
+  let indiaFallbackUsed = 0;
 
   await Promise.all(
     securities.map(async (s) => {
-      const found =
-        s.country === "United States"
-          ? await fetchYahooSplits(toYahooSymbol(s.ticker, "United States"))
-          : await fetchNseCorporateActions(s.ticker);
-
-      if (s.country === "India") {
+      let found: FetchedAction[];
+      if (s.country === "United States") {
+        found = await fetchYahooSplits(toYahooSymbol(s.ticker, "United States"));
+      } else {
         indiaAttempted = true;
+        found = await fetchNseCorporateActions(s.ticker);
         indiaFound += found.length;
+        if (found.length === 0) {
+          const yahooFallback = await fetchYahooSplits(toYahooSymbol(s.ticker, "India"));
+          if (yahooFallback.length > 0) {
+            indiaFallbackUsed += 1;
+            found = yahooFallback;
+          }
+        }
       }
+
       if (found.length === 0) return;
 
       const rows = found.map((f) => ({
@@ -119,7 +131,7 @@ export async function autoFetchCorporateActions(): Promise<AutoFetchResult> {
   revalidatePath("/dashboard");
   revalidatePath("/returns");
 
-  return { status: "done", added, checked: securities.length, indiaAttempted, indiaFound };
+  return { status: "done", added, checked: securities.length, indiaAttempted, indiaFound, indiaFallbackUsed };
 }
 
 export async function listCorporateActions(): Promise<CorporateAction[]> {
