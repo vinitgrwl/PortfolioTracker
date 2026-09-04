@@ -224,6 +224,43 @@ create policy "corporate_actions_owner_all" on corporate_actions
 create index if not exists corporate_actions_ticker_idx on corporate_actions(asset_ticker);
 
 -- ---------------------------------------------------------------------
+-- pending_corporate_actions: best-effort matches from the Dhan scanX
+-- feed (India bonus/split), held here for manual review before they
+-- ever touch FIFO/realized P&L. Dhan's ratio direction in its free-text
+-- "Note" field isn't confirmed from documentation alone, so the parsed
+-- ratio is a starting guess only — the user edits/confirms it in the UI,
+-- and confirming inserts a normal row into corporate_actions (source
+-- 'auto'). Nothing here is ever read by lib/lots.ts.
+-- ---------------------------------------------------------------------
+create table if not exists pending_corporate_actions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+
+  asset_ticker text not null,
+  isin text,
+  country text not null default 'India' check (country in ('United States', 'India')),
+  action_type text not null check (action_type in ('split', 'bonus')),
+
+  raw_note text not null,             -- Dhan's original "Note" field, e.g. "1:1"
+  dhan_symbol text,                   -- Dhan's own symbol, for cross-reference
+  parsed_ratio_from numeric,          -- best-effort guess — user reviews before confirming
+  parsed_ratio_to numeric,
+  ex_date date not null,
+
+  created_at timestamptz not null default now(),
+
+  unique (user_id, asset_ticker, country, action_type, ex_date)
+);
+
+alter table pending_corporate_actions enable row level security;
+
+drop policy if exists "pending_corporate_actions_owner_all" on pending_corporate_actions;
+create policy "pending_corporate_actions_owner_all" on pending_corporate_actions
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------
 -- cash_transactions: cash movements that are NOT a buy/sell/dividend of
 -- a security — deposits, withdrawals, cross-platform transfers, interest,
 -- and fees. Per-platform cash balance is DERIVED (never stored): it's the

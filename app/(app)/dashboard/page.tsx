@@ -8,17 +8,24 @@ import NetWorthTrendChart from "@/components/NetWorthTrendChart";
 import AllocationChart from "@/components/AllocationChart";
 import type { Transaction, ManualInstrument, LatestPrice, CorporateAction, Member } from "@/lib/types";
 import Link from "next/link";
+import { after } from "next/server";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
 
-  // Best-effort auto-refresh (skips symbols priced within the last 5 min).
-  // Silent here — the Prices page is where refresh status/errors surface.
-  try {
-    await refreshLivePrices();
-  } catch {
-    // ignore — dashboard should still render with whatever prices exist
-  }
+  // Price refresh moved off the render path: it used to be awaited here,
+  // blocking the page on Yahoo/CoinGecko/AMFI calls (AMFI's full NAV file
+  // alone can take a couple of seconds) before a single row of data had
+  // even been fetched. `after()` runs it once the response has been sent,
+  // so this load renders with whatever prices are already in the DB
+  // (up to 5 min stale) and the next load gets the freshly refreshed ones.
+  after(async () => {
+    try {
+      await refreshLivePrices();
+    } catch {
+      // best-effort — same as before, just no longer on the render path
+    }
+  });
 
   const [membersRes, transactions, instrumentsRes, pricesRes, rateRes, corporateActions] = await Promise.all([
     supabase.from("members").select("*").order("name"),

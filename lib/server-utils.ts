@@ -3,11 +3,17 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export async function requireUser() {
   const supabase = await createClient();
+  // Cookie-based, not a network round-trip: middleware (proxy.ts) already
+  // called getUser() for this same request and redirects unauthenticated
+  // requests to /login before a page ever renders, so re-verifying against
+  // Supabase's auth server here would just be a second network call for
+  // the same answer. getSession() reads the already-verified session
+  // straight from the cookie.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not signed in");
-  return { supabase, userId: user.id };
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.user) throw new Error("Not signed in");
+  return { supabase, userId: session.user.id };
 }
 
 /**

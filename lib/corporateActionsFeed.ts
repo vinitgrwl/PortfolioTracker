@@ -137,3 +137,107 @@ export async function fetchNseCorporateActions(symbol: string): Promise<FetchedA
     return [];
   }
 }
+
+// --------------------------------- Dhan ---------------------------------
+// scanX customscan endpoint — unofficial/reverse-engineered, no API key.
+// Unlike NSE, one call returns EVERY India-listed security's corporate
+// actions for a date range (up to 5000 rows) rather than needing one
+// request per ticker. Used only as a "pending review" source (see
+// pending_corporate_actions in schema.sql) — the ratio direction in its
+// free-text Note field ("1:1", "1:10 split") isn't confirmed from Dhan's
+// documentation, so this never writes directly into corporate_actions.
+
+export interface DhanCorpAction {
+  symbol: string;
+  dispName: string | null;
+  actType: "BONUS" | "SPLIT";
+  exDate: string; // YYYY-MM-DD
+  note: string;
+}
+
+const DHAN_URL = "https://ow-scanx-analytics.dhan.co/customscan/fetchdt";
+const DHAN_HEADERS = {
+  "Content-Type": "application/json",
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+  Accept: "application/json, text/plain, */*",
+  Origin: "https://scanx.dhan.co",
+  Referer: "https://scanx.dhan.co/",
+};
+
+/** Fetches every BONUS/SPLIT corporate action across the whole India
+ *  market for the given date range (inclusive), in one request. */
+export async function fetchDhanCorporateActions(
+  fromDate: string,
+  toDate: string
+): Promise<DhanCorpAction[]> {
+  try {
+    const payload = {
+      data: {
+        sort: "CorpAct.ExDate",
+        sorder: "asc",
+        count: 5000,
+        fields: ["CorpAct.ActType", "Sym", "DispSym", "CorpAct.ExDate", "CorpAct.RecDate", "CorpAct.Note"],
+        params: [
+          { field: "Seg", op: "", val: "E" },
+          { field: "OgInst", op: "", val: "ES" },
+          { field: "CorpAct.ExDate", op: "gte", val: fromDate },
+          { field: "CorpAct.ExDate", op: "lte", val: toDate },
+          { field: "Mcapclass", op: "", val: "Largecap,Midcap,Smallcap,Microcap" },
+          { field: "CorpAct.ActType", op: "", val: "BONUS,SPLIT" },
+        ],
+        pgno: 0,
+      },
+    };
+
+    const res = await fetch(DHAN_URL, {
+      method: "POST",
+      headers: DHAN_HEADERS,
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    const rows = json?.data;
+    if (!Array.isArray(rows)) return [];
+
+    const out: DhanCorpAction[] = [];
+    for (const stock of rows) {
+      const symbol: string | undefined = stock?.Sym;
+      const dispName: string | null = stock?.DispSym ?? null;
+      const actions = stock?.CorpAct;
+      if (!symbol || !Array.isArray(actions)) continue;
+
+      for (const a of actions) {
+        const actType = a?.ActType;
+        const exDate = a?.ExDate;
+        const note = a?.Note;
+        if ((actType !== "BONUS" && actType !== "SPLIT") || !exDate || !note) continue;
+        if (exDate < fromDate || exDate > toDate) continue; // belt-and-braces, per Dhan's own docs
+        out.push({ symbol: symbol.trim().toUpperCase(), dispName, actType, exDate, note: String(note).trim() });
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/** Best-effort parse of Dhan's free-text Note into a ratio — a STARTING
+ *  GUESS only. Direction (which number is "old"/"new") isn't confirmed
+ *  from Dhan's docs, so callers must treat this as pending-review data,
+ *  never write it straight into corporate_actions. Assumes the same
+ *  "first:second" = "new:held" convention already used for NSE's bonus
+ *  text (see parseNseSubject above) — i.e. ratio_from = second number,
+ *  ratio_to = first number. Returns null if the Note doesn't contain a
+ *  recognizable X:Y ratio at all (still worth showing for manual entry).
+ */
+export function parseDhanNote(note: string): { ratio_from: number; ratio_to: number } | null {
+  const m = note.match(/(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)/);
+  if (!m) return null;
+  const [, first, second] = m;
+  const a = Number(first);
+  const b = Number(second);
+  if (!(a > 0) || !(b > 0)) return null;
+  return { ratio_from: b, ratio_to: a };
+}

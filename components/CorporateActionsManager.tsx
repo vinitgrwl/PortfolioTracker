@@ -1,12 +1,27 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { addCorporateAction, deleteCorporateAction, autoFetchCorporateActions } from "@/lib/actions-corp-actions";
-import type { CorporateAction } from "@/lib/types";
+import {
+  addCorporateAction,
+  deleteCorporateAction,
+  autoFetchCorporateActions,
+  fetchDhanPendingActionsAction,
+  confirmPendingCorporateAction,
+  dismissPendingCorporateAction,
+} from "@/lib/actions-corp-actions";
+import type { CorporateAction, PendingCorporateAction } from "@/lib/types";
 
-export default function CorporateActionsManager({ actions }: { actions: CorporateAction[] }) {
+export default function CorporateActionsManager({
+  actions,
+  pendingActions,
+}: {
+  actions: CorporateAction[];
+  pendingActions: PendingCorporateAction[];
+}) {
   const [pending, startTransition] = useTransition();
+  const [dhanPending, startDhanTransition] = useTransition();
   const [result, setResult] = useState<string | null>(null);
+  const [dhanResult, setDhanResult] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
 
   return (
@@ -16,6 +31,8 @@ export default function CorporateActionsManager({ actions }: { actions: Corporat
           Splits and bonus issues, applied automatically to holdings and realized P&amp;L by date. US tickers
           auto-fetch reliably via Yahoo Finance. India tickers try NSE first, then Yahoo Finance as a
           fallback for splits only (bonus issues aren&apos;t on Yahoo) — add those manually if both come up empty.
+          &ldquo;Check Dhan&rdquo; is a second India source, but only ever stages matches below for you to review
+          and confirm — its ratio direction isn&apos;t applied automatically.
         </p>
         <div className="flex gap-2 shrink-0">
           <button
@@ -40,6 +57,21 @@ export default function CorporateActionsManager({ actions }: { actions: Corporat
           </button>
           <button
             type="button"
+            disabled={dhanPending}
+            onClick={() =>
+              startDhanTransition(async () => {
+                const res = await fetchDhanPendingActionsAction();
+                setDhanResult(
+                  `Checked ${res.checked} India ticker(s), ${res.matched} match(es) from Dhan, ${res.added} new one(s) staged below for review.`
+                );
+              })
+            }
+            className="border border-rule px-3 py-1.5 text-xs text-ink-soft hover:text-ink disabled:opacity-60"
+          >
+            {dhanPending ? "Checking…" : "Check Dhan (India)"}
+          </button>
+          <button
+            type="button"
             onClick={() => setShowForm((v) => !v)}
             className="border border-rule px-3 py-1.5 text-xs text-ink-soft hover:text-ink"
           >
@@ -49,6 +81,7 @@ export default function CorporateActionsManager({ actions }: { actions: Corporat
       </div>
 
       {result && <p className="px-3 py-2 text-xs text-ink-soft border-b border-rule">{result}</p>}
+      {dhanResult && <p className="px-3 py-2 text-xs text-ink-soft border-b border-rule">{dhanResult}</p>}
 
       {showForm && (
         <form
@@ -110,6 +143,80 @@ export default function CorporateActionsManager({ actions }: { actions: Corporat
             Add
           </button>
         </form>
+      )}
+
+      {pendingActions.length > 0 && (
+        <div className="border-b border-rule">
+          <h3 className="text-xs text-ink-soft px-3 pt-3">
+            Pending review — from Dhan, ratio not yet confirmed
+          </h3>
+          <table className="ledger">
+            <thead>
+              <tr>
+                <th>Ticker</th>
+                <th>Type</th>
+                <th>Ex-date</th>
+                <th>Raw note</th>
+                <th>Ratio (edit if needed)</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {pendingActions
+                .slice()
+                .sort((a, b) => b.ex_date.localeCompare(a.ex_date))
+                .map((p) => (
+                  <tr key={p.id}>
+                    <td>{p.asset_ticker}</td>
+                    <td className="capitalize">{p.action_type}</td>
+                    <td className="whitespace-nowrap">{p.ex_date}</td>
+                    <td className="text-xs text-ink-soft">{p.raw_note}</td>
+                    <td>
+                      <form action={confirmPendingCorporateAction} className="flex items-center gap-1">
+                        <input type="hidden" name="pending_id" value={p.id} />
+                        <input type="hidden" name="asset_ticker" value={p.asset_ticker} />
+                        <input type="hidden" name="isin" value={p.isin ?? ""} />
+                        <input type="hidden" name="country" value={p.country} />
+                        <input type="hidden" name="action_type" value={p.action_type} />
+                        <input type="hidden" name="ex_date" value={p.ex_date} />
+                        <input
+                          name="ratio_from"
+                          type="number"
+                          step="any"
+                          required
+                          defaultValue={p.parsed_ratio_from ?? undefined}
+                          className="input w-16"
+                        />
+                        <span className="text-ink-soft">:</span>
+                        <input
+                          name="ratio_to"
+                          type="number"
+                          step="any"
+                          required
+                          defaultValue={p.parsed_ratio_to ?? undefined}
+                          className="input w-16"
+                        />
+                        <button
+                          type="submit"
+                          className="border border-rule px-2 py-1 text-xs text-ink-soft hover:text-gain hover:border-gain"
+                        >
+                          Confirm
+                        </button>
+                      </form>
+                    </td>
+                    <td>
+                      <form action={dismissPendingCorporateAction}>
+                        <input type="hidden" name="id" value={p.id} />
+                        <button type="submit" className="text-ink-soft hover:text-loss text-xs">
+                          Dismiss
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {actions.length > 0 && (

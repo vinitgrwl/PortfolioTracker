@@ -87,6 +87,21 @@ export interface ExchangeRate {
   updated_at: string;
 }
 
+export interface PendingCorporateAction {
+  id: string;
+  user_id: string;
+  asset_ticker: string;
+  isin: string | null;
+  country: Country;
+  action_type: CorporateActionType;
+  raw_note: string;
+  dhan_symbol: string | null;
+  parsed_ratio_from: number | null;
+  parsed_ratio_to: number | null;
+  ex_date: string;
+  created_at: string;
+}
+
 // ---------------------------------------------------------------------
 // Cash ledger
 // ---------------------------------------------------------------------
