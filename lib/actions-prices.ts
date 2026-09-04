@@ -10,6 +10,7 @@ import {
   CRYPTO_ID_MAP,
 } from "@/lib/priceFeeds";
 import { resolveEffectiveIdentity } from "@/lib/companyEvents";
+import { backfillIsins } from "@/lib/identity";
 import type { Transaction, CompanyEvent, Currency, Country, AssetClass } from "@/lib/types";
 
 const STALE_AFTER_MS = 5 * 60 * 1000; // don't re-hit external APIs more than this often
@@ -35,7 +36,7 @@ interface HoldingKey {
 export async function refreshLivePrices(force = false) {
   const { supabase, userId } = await requireUser();
 
-  const [transactions, companyEvents, pricesRes, rateRes] = await Promise.all([
+  const [rawTransactions, companyEvents, pricesRes, rateRes] = await Promise.all([
     fetchAll<Pick<Transaction, "asset_ticker" | "isin" | "currency" | "country" | "asset_class">>(
       supabase,
       "transactions",
@@ -45,6 +46,7 @@ export async function refreshLivePrices(force = false) {
     supabase.from("latest_prices").select("asset_ticker, currency, updated_at"),
     supabase.from("exchange_rates").select("updated_at").eq("pair", "USD_INR").maybeSingle(),
   ]);
+  const transactions = backfillIsins(rawTransactions);
 
 
   const now = Date.now();

@@ -4,7 +4,13 @@ import { useState, useTransition } from "react";
 import { addCorporateAction, deleteCorporateAction, autoFetchCorporateActions } from "@/lib/actions-corp-actions";
 import type { CorporateAction } from "@/lib/types";
 
-export default function CorporateActionsManager({ actions }: { actions: CorporateAction[] }) {
+export default function CorporateActionsManager({
+  actions,
+  onRefresh,
+}: {
+  actions: CorporateAction[];
+  onRefresh?: () => void;
+}) {
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -34,6 +40,7 @@ export default function CorporateActionsManager({ actions }: { actions: Corporat
                   : "";
                 const dhanNote = res.dhanChecked > 0 ? ` Dhan added ${res.dhanAdded} more.` : "";
                 setResult(`Checked ${res.checked} securities, added ${res.added} new action(s).${indiaNote}${dhanNote}`);
+                onRefresh?.();
               })
             }
             className="border border-rule px-3 py-1.5 text-xs text-ink-soft hover:text-ink disabled:opacity-60"
@@ -57,6 +64,7 @@ export default function CorporateActionsManager({ actions }: { actions: Corporat
           action={async (fd) => {
             await addCorporateAction(fd);
             setShowForm(false);
+            onRefresh?.();
           }}
           className="px-3 py-3 border-b border-rule flex flex-wrap gap-2 items-end"
         >
@@ -142,7 +150,13 @@ export default function CorporateActionsManager({ actions }: { actions: Corporat
                   <td className="whitespace-nowrap">{a.ex_date}</td>
                   <td className="text-xs text-ink-soft">{a.source}</td>
                   <td>
-                    <form action={deleteCorporateAction} className="inline">
+                    <form
+                      action={async (fd) => {
+                        await deleteCorporateAction(fd);
+                        onRefresh?.();
+                      }}
+                      className="inline"
+                    >
                       <input type="hidden" name="id" value={a.id} />
                       <button type="submit" className="text-ink-soft hover:text-loss text-xs">
                         Remove

@@ -13,6 +13,7 @@ import {
   dateRangeDaily,
 } from "@/lib/historicalPrices";
 import { computeDailyNetWorthSeries, holdingKey } from "@/lib/networthHistory";
+import { securityKey, backfillIsins } from "@/lib/identity";
 
 /**
  * One-time (or on-demand) full backfill: reconstructs a daily net worth
@@ -24,11 +25,12 @@ import { computeDailyNetWorthSeries, holdingKey } from "@/lib/networthHistory";
 export async function buildNetWorthHistory() {
   const { supabase, userId } = await requireUser();
 
-  const [transactions, instrumentsRes, companyEvents] = await Promise.all([
+  const [rawTransactions, instrumentsRes, companyEvents] = await Promise.all([
     fetchAll<Transaction>(supabase, "transactions"),
     supabase.from("manual_instruments").select("*"),
     fetchAll<CompanyEvent>(supabase, "company_events"),
   ]);
+  const transactions = backfillIsins(rawTransactions);
 
   const instruments = (instrumentsRes.data ?? []) as ManualInstrument[];
 
@@ -76,7 +78,7 @@ export async function buildNetWorthHistory() {
   // has nothing to price the moved quantity with.
   for (const ev of companyEvents) {
     const currency = ev.new_country === "India" ? "INR" : "USD";
-    const key = ev.new_isin?.trim() ? ev.new_isin.trim() : `${ev.new_ticker}::${currency}`;
+    const key = securityKey(ev.new_isin, ev.new_ticker, ev.new_country);
     if (!holdings.has(key)) {
       holdings.set(key, {
         ticker: ev.new_ticker,

@@ -2,8 +2,10 @@ import { createClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/server-utils";
 import { upsertPrice, deletePrice, upsertExchangeRate } from "@/lib/actions";
 import { refreshLivePrices, refreshLivePricesAction } from "@/lib/actions-prices";
+import MissingPricesList from "@/components/MissingPricesList";
 import { resolveEffectiveIdentity } from "@/lib/companyEvents";
-import type { LatestPrice, Transaction, CompanyEvent, ExchangeRate } from "@/lib/types";
+import { backfillIsins } from "@/lib/identity";
+import type { LatestPrice, Transaction, CompanyEvent, ExchangeRate, Currency } from "@/lib/types";
 
 export default async function PricesPage() {
   const supabase = await createClient();
@@ -16,7 +18,7 @@ export default async function PricesPage() {
     refreshError = e instanceof Error ? e.message : "Live price refresh failed";
   }
 
-  const [pricesRes, transactions, companyEvents, rateRes] = await Promise.all([
+  const [pricesRes, rawTransactions, companyEvents, rateRes] = await Promise.all([
     supabase.from("latest_prices").select("*").order("updated_at", { ascending: false }),
     fetchAll<Pick<Transaction, "asset_ticker" | "isin" | "currency" | "country">>(
       supabase,
@@ -26,6 +28,7 @@ export default async function PricesPage() {
     fetchAll<CompanyEvent>(supabase, "company_events"),
     supabase.from("exchange_rates").select("*").eq("pair", "USD_INR").maybeSingle(),
   ]);
+  const transactions = backfillIsins(rawTransactions);
 
   const prices = (pricesRes.data ?? []) as LatestPrice[];
   const rate = rateRes.data as ExchangeRate | null;
@@ -40,8 +43,8 @@ export default async function PricesPage() {
   const tickersHeld = Array.from(
     new Map(
       effectiveHeld.map((t) => {
-        const currency = t.country === "India" ? "INR" : "USD";
-        return [`${t.ticker}::${currency}`, { asset_ticker: t.ticker, currency }];
+        const currency: Currency = t.country === "India" ? "INR" : "USD";
+        return [`${t.ticker}::${currency}`, { asset_ticker: t.ticker, isin: t.isin, country: t.country, currency }];
       })
     ).values()
   );
@@ -95,19 +98,7 @@ export default async function PricesPage() {
 
       {missing.length > 0 && (
         <Section title="Missing prices">
-          <div className="px-3 py-3">
-            <p className="text-xs text-ink-soft mb-2">
-              These holdings don&rsquo;t have a current price yet — the dashboard counts their
-              invested value but not their current value.
-            </p>
-            <ul className="flex flex-wrap gap-2">
-              {missing.map((t) => (
-                <li key={`${t.asset_ticker}::${t.currency}`} className="text-xs bg-white border border-rule px-2 py-1">
-                  {t.asset_ticker} ({t.currency})
-                </li>
-              ))}
-            </ul>
-          </div>
+          <MissingPricesList missing={missing} />
         </Section>
       )}
 

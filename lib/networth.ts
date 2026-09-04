@@ -8,6 +8,7 @@ import type {
   AssetClass,
 } from "./types";
 import { replayLots, holdingKey } from "./lots";
+import { securityKeyFromCurrency } from "./identity";
 
 // -----------------------------------------------------------------------
 // Holdings — derived from the Transactions ledger via the shared FIFO
@@ -35,12 +36,12 @@ export interface Holding {
   sector: string | null;
 }
 
-function holdingKeyFor(t: Pick<Transaction, "isin" | "asset_ticker" | "currency">) {
+function holdingKeyFor(t: Pick<Transaction, "isin" | "asset_ticker" | "currency" | "country">) {
   return holdingKey(t);
 }
 
 function priceKey(p: Pick<LatestPrice, "isin" | "asset_ticker" | "currency">) {
-  return p.isin && p.isin.trim() ? p.isin.trim() : `${p.asset_ticker}::${p.currency}`;
+  return securityKeyFromCurrency(p.isin, p.asset_ticker, p.currency);
 }
 
 export function computeHoldings(

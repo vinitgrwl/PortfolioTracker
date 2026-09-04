@@ -1,6 +1,8 @@
 import type { Transaction, ManualInstrument, CompanyEvent, Currency, Country, AssetClass } from "./types";
 import { computeFDCurrentValue } from "./networth";
 import { ForwardFiller } from "./historicalPrices";
+import { holdingKey } from "./lots";
+import { securityKey } from "./identity";
 
 interface HoldingMeta {
   key: string; // ISIN or ticker::currency — same identity rule as networth.ts
@@ -9,10 +11,6 @@ interface HoldingMeta {
   currency: Currency;
   country: Country;
   assetClass: AssetClass;
-}
-
-function holdingKey(t: Pick<Transaction, "isin" | "asset_ticker" | "currency">) {
-  return t.isin && t.isin.trim() ? t.isin.trim() : `${t.asset_ticker}::${t.currency}`;
 }
 
 function currencyForCountry(country: Country): Currency {
@@ -75,10 +73,9 @@ export function computeDailyNetWorthSeries(
   const transfers = [...companyEvents]
     .sort((a, b) => a.effective_date.localeCompare(b.effective_date))
     .map((ev) => {
-      const fromCurrency = currencyForCountry(ev.old_country);
-      const fromKey = ev.old_isin?.trim() ? ev.old_isin.trim() : `${ev.old_ticker}::${fromCurrency}`;
+      const fromKey = securityKey(ev.old_isin, ev.old_ticker, ev.old_country);
+      const toKey = securityKey(ev.new_isin, ev.new_ticker, ev.new_country);
       const toCurrency = currencyForCountry(ev.new_country);
-      const toKey = ev.new_isin?.trim() ? ev.new_isin.trim() : `${ev.new_ticker}::${toCurrency}`;
       const fromMeta = holdingMeta.get(fromKey);
       if (!holdingMeta.has(toKey)) {
         holdingMeta.set(toKey, {

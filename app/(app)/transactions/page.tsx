@@ -4,24 +4,25 @@ import { addMember, addTransaction, deleteMember } from "@/lib/actions";
 import MfQuickAddForm from "@/components/MfQuickAddForm";
 import LedgerLoader from "@/components/LedgerLoader";
 import IsinResolver from "@/components/IsinResolver";
-import CorporateActionsManager from "@/components/CorporateActionsManager";
+import CorporateActionsLoader from "@/components/CorporateActionsLoader";
 import CompanyEventsManager from "@/components/CompanyEventsManager";
 import { findUnresolvedTickers } from "@/lib/actions-isin";
-import type { Member, CorporateAction, CompanyEvent, ExchangeRate } from "@/lib/types";
+import type { Member, CompanyEvent, ExchangeRate } from "@/lib/types";
 
 export default async function TransactionsPage() {
   const supabase = await createClient();
 
-  const [membersRes, txnCountRes, corporateActions, companyEvents, rateRes] = await Promise.all([
+  const [membersRes, txnCountRes, corpActionCountRes, companyEvents, rateRes] = await Promise.all([
     supabase.from("members").select("*").order("name"),
     supabase.from("transactions").select("id", { count: "exact", head: true }),
-    fetchAll<CorporateAction>(supabase, "corporate_actions"),
+    supabase.from("corporate_actions").select("id", { count: "exact", head: true }),
     fetchAll<CompanyEvent>(supabase, "company_events"),
     supabase.from("exchange_rates").select("*").eq("pair", "USD_INR").maybeSingle(),
   ]);
 
   const members = (membersRes.data ?? []) as Member[];
   const txnCount = txnCountRes.count ?? 0;
+  const corpActionCount = corpActionCountRes.count ?? 0;
   const usdInrRate = (rateRes.data as ExchangeRate | null)?.rate ?? null;
   const unresolvedTickers = await findUnresolvedTickers();
 
@@ -220,8 +221,8 @@ export default async function TransactionsPage() {
         </Section>
       )}
 
-      <Section title={`Corporate actions (${corporateActions.length})`}>
-        <CorporateActionsManager actions={corporateActions} />
+      <Section title={`Corporate actions (${corpActionCount})`}>
+        <CorporateActionsLoader approxCount={corpActionCount} />
       </Section>
 
       <Section title={`Company events (${companyEvents.length})`}>

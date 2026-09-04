@@ -4,6 +4,7 @@ import { computeHoldings } from "@/lib/networth";
 import { computeRealizedPL } from "@/lib/realizedPL";
 import { listScreenerOptions, computeScreenerSummary } from "@/lib/screener";
 import { fetchYahooWatchlistQuote, fetchYahooCompanySnapshot, toYahooSymbol } from "@/lib/priceFeeds";
+import { backfillIsins } from "@/lib/identity";
 import { formatINR, formatPercent, formatQty } from "@/lib/format";
 import ScreenerPicker from "@/components/ScreenerPicker";
 import type { Member, Transaction, LatestPrice, CorporateAction, ExchangeRate } from "@/lib/types";
@@ -16,13 +17,15 @@ export default async function ScreenerPage({
   const { key: selectedKey } = await searchParams;
   const supabase = await createClient();
 
-  const [membersRes, transactions, prices, corporateActions, rateRes] = await Promise.all([
+  const [membersRes, rawTransactions, prices, corporateActions, rateRes] = await Promise.all([
     supabase.from("members").select("*").order("name"),
     fetchAll<Transaction>(supabase, "transactions"),
     fetchAll<LatestPrice>(supabase, "latest_prices"),
     fetchAll<CorporateAction>(supabase, "corporate_actions"),
     supabase.from("exchange_rates").select("*").eq("pair", "USD_INR").maybeSingle(),
   ]);
+
+  const transactions = backfillIsins(rawTransactions);
 
   const members = (membersRes.data ?? []) as Member[];
   const usdInrRate = (rateRes.data as ExchangeRate | null)?.rate ?? 0;

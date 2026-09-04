@@ -2,6 +2,7 @@ import type { Transaction, Member, Currency, Country, AssetClass } from "./types
 import type { Holding } from "./networth";
 import { toINR } from "./networth";
 import type { RealizedTrade } from "./lots";
+import { securityKey } from "./identity";
 
 export interface ScreenerOption {
   key: string; // ISIN or ticker::currency
@@ -15,7 +16,7 @@ export interface ScreenerOption {
 export function listScreenerOptions(transactions: Transaction[]): ScreenerOption[] {
   const byKey = new Map<string, ScreenerOption>();
   for (const t of transactions) {
-    const key = t.isin && t.isin.trim() ? t.isin.trim() : `${t.asset_ticker}::${t.currency}`;
+    const key = securityKey(t.isin, t.asset_ticker, t.country);
     const existing = byKey.get(key);
     if (!existing) {
       byKey.set(key, { key, ticker: t.asset_ticker, assetName: t.asset_name, currency: t.currency, country: t.country });
@@ -63,10 +64,7 @@ export function computeScreenerSummary(
   usdInrRate: number
 ): ScreenerSummary | null {
   const matchingHoldings = holdings.filter((h) => h.key === key);
-  const matchingTxns = transactions.filter((t) => {
-    const tKey = t.isin && t.isin.trim() ? t.isin.trim() : `${t.asset_ticker}::${t.currency}`;
-    return tKey === key;
-  });
+  const matchingTxns = transactions.filter((t) => securityKey(t.isin, t.asset_ticker, t.country) === key);
   if (matchingHoldings.length === 0 && matchingTxns.length === 0) return null;
 
   const first = matchingHoldings[0] ?? null;

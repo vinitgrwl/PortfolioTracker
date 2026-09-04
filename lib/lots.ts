@@ -1,4 +1,5 @@
 import type { Transaction, CorporateAction, Currency, Country, AssetClass } from "./types";
+import { securityKey } from "./identity";
 
 export interface Lot {
   date: string; // acquisition date — for bonus lots, this is the bonus ex_date
@@ -49,13 +50,12 @@ function classify(assetClass: AssetClass, country: Country, holdingDays: number)
   return holdingDays > longTermThresholdDays ? "LTCG" : "STCG";
 }
 
-export function holdingKey(t: Pick<Transaction, "isin" | "asset_ticker" | "currency">) {
-  return t.isin && t.isin.trim() ? t.isin.trim() : `${t.asset_ticker}::${t.currency}`;
+export function holdingKey(t: Pick<Transaction, "isin" | "asset_ticker" | "currency" | "country">) {
+  return securityKey(t.isin, t.asset_ticker, t.country);
 }
 
 function actionKey(a: Pick<CorporateAction, "isin" | "asset_ticker" | "country">) {
-  const currency: Currency = a.country === "India" ? "INR" : "USD";
-  return a.isin && a.isin.trim() ? a.isin.trim() : `${a.asset_ticker}::${currency}`;
+  return securityKey(a.isin, a.asset_ticker, a.country);
 }
 
 type BuySellEvent = { kind: "buy" | "sell"; date: string; t: Transaction };

@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Transaction, CompanyEvent } from "./types";
 import { applyCompanyEvents } from "./companyEvents";
+import { backfillIsins } from "./identity";
 
 export async function requireUser() {
   const supabase = await createClient();
@@ -85,9 +86,10 @@ export function optNum(formData: FormData, key: string): number | null {
 // ---------------------------------------------------------------------
 
 export async function fetchEffectiveTransactions(supabase: SupabaseClient): Promise<Transaction[]> {
-  const [transactions, events] = await Promise.all([
+  const [rawTransactions, events] = await Promise.all([
     fetchAll<Transaction>(supabase, "transactions"),
     fetchAll<CompanyEvent>(supabase, "company_events"),
   ]);
+  const transactions = backfillIsins(rawTransactions);
   return applyCompanyEvents(transactions, events);
 }

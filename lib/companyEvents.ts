@@ -1,8 +1,5 @@
 import type { Transaction, CompanyEvent, Currency, Country } from "./types";
-
-function identityKey(isin: string | null, ticker: string, country: Country): string {
-  return isin && isin.trim() ? isin.trim() : `${ticker.trim().toUpperCase()}::${country}`;
-}
+import { securityKey } from "./identity";
 
 function currencyForCountry(country: Country): Currency {
   return country === "India" ? "INR" : "USD";
@@ -34,13 +31,13 @@ export function applyCompanyEvents(transactions: Transaction[], events: CompanyE
   let result = transactions;
 
   for (const ev of sorted) {
-    const oldKey = identityKey(ev.old_isin, ev.old_ticker, ev.old_country);
+    const oldKey = securityKey(ev.old_isin, ev.old_ticker, ev.old_country);
     const factor = ev.ratio_to / ev.ratio_from;
 
     result = result.map((t) => {
       if (t.action === "dividend") return t;
       if (t.txn_date >= ev.effective_date) return t; // only pre-event trades get rewritten
-      if (identityKey(t.isin, t.asset_ticker, t.country) !== oldKey) return t;
+      if (securityKey(t.isin, t.asset_ticker, t.country) !== oldKey) return t;
 
       return {
         ...t,
@@ -75,8 +72,8 @@ export function resolveEffectiveIdentity(
   let current = { ticker, isin, country };
 
   for (const ev of sorted) {
-    const oldKey = identityKey(ev.old_isin, ev.old_ticker, ev.old_country);
-    if (identityKey(current.isin, current.ticker, current.country) !== oldKey) continue;
+    const oldKey = securityKey(ev.old_isin, ev.old_ticker, ev.old_country);
+    if (securityKey(current.isin, current.ticker, current.country) !== oldKey) continue;
     current = { ticker: ev.new_ticker, isin: ev.new_isin, country: ev.new_country };
   }
 
