@@ -2,18 +2,19 @@ import type {
   Transaction,
   ManualInstrument,
   LatestPrice,
+  CorporateAction,
   Currency,
   Country,
   AssetClass,
 } from "./types";
+import { replayLots, holdingKey } from "./lots";
 
 // -----------------------------------------------------------------------
-// Holdings — derived from the Transactions ledger.
+// Holdings — derived from the Transactions ledger via the shared FIFO
+// lot replay in lib/lots.ts (so a split/bonus applied there is reflected
+// here automatically, and can never disagree with the Realized P&L page).
 // Identity: ISIN when present, else ticker+currency (so the same symbol
 // in two currencies never collapses into one row).
-// Cost basis: average-cost method for now. FIFO is reserved for the
-// separate Realized P&L engine (Phase 5 of the blueprint) — holdings
-// here only need the cost of what's still held.
 // -----------------------------------------------------------------------
 
 export interface Holding {
@@ -33,8 +34,8 @@ export interface Holding {
   dividendTotal: number; // native currency, informational only
 }
 
-function holdingKey(t: Pick<Transaction, "isin" | "asset_ticker" | "currency">) {
-  return t.isin && t.isin.trim() ? t.isin.trim() : `${t.asset_ticker}::${t.currency}`;
+function holdingKeyFor(t: Pick<Transaction, "isin" | "asset_ticker" | "currency">) {
+  return holdingKey(t);
 }
 
 function priceKey(p: Pick<LatestPrice, "isin" | "asset_ticker" | "currency">) {
@@ -43,12 +44,13 @@ function priceKey(p: Pick<LatestPrice, "isin" | "asset_ticker" | "currency">) {
 
 export function computeHoldings(
   transactions: Transaction[],
-  prices: LatestPrice[]
+  prices: LatestPrice[],
+  corporateActions: CorporateAction[] = []
 ): Holding[] {
   const priceByKey = new Map<string, number>();
   for (const p of prices) priceByKey.set(priceKey(p), p.current_price);
 
-  type Acc = {
+  type Meta = {
     memberId: string;
     key: string;
     assetTicker: string;
@@ -57,20 +59,17 @@ export function computeHoldings(
     currency: Currency;
     country: Country;
     assetClass: AssetClass;
-    buyQty: number;
-    buyCost: number; // includes fees
-    sellQty: number;
     dividendTotal: number;
   };
 
-  const byMemberAndAsset = new Map<string, Acc>();
+  const metaByGroup = new Map<string, Meta>();
 
   for (const t of transactions) {
-    const key = holdingKey(t);
+    const key = holdingKeyFor(t);
     const groupKey = `${t.member_id}::${key}`;
 
-    if (!byMemberAndAsset.has(groupKey)) {
-      byMemberAndAsset.set(groupKey, {
+    if (!metaByGroup.has(groupKey)) {
+      metaByGroup.set(groupKey, {
         memberId: t.member_id,
         key,
         assetTicker: t.asset_ticker,
@@ -79,56 +78,49 @@ export function computeHoldings(
         currency: t.currency,
         country: t.country,
         assetClass: t.asset_class,
-        buyQty: 0,
-        buyCost: 0,
-        sellQty: 0,
         dividendTotal: 0,
       });
     }
 
-    const acc = byMemberAndAsset.get(groupKey)!;
-    if (!acc.assetName && t.asset_name) acc.assetName = t.asset_name;
+    const meta = metaByGroup.get(groupKey)!;
+    if (!meta.assetName && t.asset_name) meta.assetName = t.asset_name;
 
-    if (t.action === "buy") {
-      acc.buyQty += t.quantity;
-      acc.buyCost += t.quantity * t.price + t.fiat_fees;
-    } else if (t.action === "sell") {
-      acc.sellQty += t.quantity;
-    } else if (t.action === "dividend") {
+    if (t.action === "dividend") {
       // convention: quantity = 1, price = total cash amount
-      acc.dividendTotal += t.quantity * t.price;
+      meta.dividendTotal += t.quantity * t.price;
     }
   }
 
+  const { lotsByGroup } = replayLots(transactions, corporateActions);
   const holdings: Holding[] = [];
 
-  for (const acc of byMemberAndAsset.values()) {
-    const quantity = acc.buyQty - acc.sellQty;
-    const avgCost = acc.buyQty > 0 ? acc.buyCost / acc.buyQty : 0;
-    const investedValue = avgCost * Math.max(quantity, 0);
-
-    const currentPrice = priceByKey.get(acc.key) ?? null;
-    const currentValue =
-      currentPrice !== null ? currentPrice * Math.max(quantity, 0) : null;
+  for (const [groupKey, meta] of metaByGroup) {
+    const lots = lotsByGroup.get(groupKey) ?? [];
+    const quantity = lots.reduce((sum, l) => sum + l.qty, 0);
+    const investedValue = lots.reduce((sum, l) => sum + l.qty * l.costPerUnit, 0);
+    const avgCost = quantity > 1e-9 ? investedValue / quantity : 0;
 
     // skip fully-exited positions (quantity ~0) — nothing left to hold
-    if (Math.abs(quantity) < 1e-9) continue;
+    if (quantity < 1e-9) continue;
+
+    const currentPrice = priceByKey.get(meta.key) ?? null;
+    const currentValue = currentPrice !== null ? currentPrice * quantity : null;
 
     holdings.push({
-      memberId: acc.memberId,
-      key: acc.key,
-      assetTicker: acc.assetTicker,
-      assetName: acc.assetName,
-      isin: acc.isin,
-      currency: acc.currency,
-      country: acc.country,
-      assetClass: acc.assetClass,
+      memberId: meta.memberId,
+      key: meta.key,
+      assetTicker: meta.assetTicker,
+      assetName: meta.assetName,
+      isin: meta.isin,
+      currency: meta.currency,
+      country: meta.country,
+      assetClass: meta.assetClass,
       quantity,
       avgCost,
       investedValue,
       currentPrice,
       currentValue,
-      dividendTotal: acc.dividendTotal,
+      dividendTotal: meta.dividendTotal,
     });
   }
 

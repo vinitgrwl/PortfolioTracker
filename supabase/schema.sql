@@ -17,6 +17,7 @@ create table if not exists members (
 
 alter table members enable row level security;
 
+drop policy if exists "members_owner_all" on members;
 create policy "members_owner_all" on members
   for all
   using (auth.uid() = user_id)
@@ -58,6 +59,7 @@ alter table transactions add column if not exists asset_name text;
 
 alter table transactions enable row level security;
 
+drop policy if exists "transactions_owner_all" on transactions;
 create policy "transactions_owner_all" on transactions
   for all
   using (auth.uid() = user_id)
@@ -97,6 +99,7 @@ create table if not exists manual_instruments (
 
 alter table manual_instruments enable row level security;
 
+drop policy if exists "manual_instruments_owner_all" on manual_instruments;
 create policy "manual_instruments_owner_all" on manual_instruments
   for all
   using (auth.uid() = user_id)
@@ -124,6 +127,7 @@ create table if not exists latest_prices (
 
 alter table latest_prices enable row level security;
 
+drop policy if exists "latest_prices_owner_all" on latest_prices;
 create policy "latest_prices_owner_all" on latest_prices
   for all
   using (auth.uid() = user_id)
@@ -148,6 +152,7 @@ create table if not exists exchange_rates (
 
 alter table exchange_rates enable row level security;
 
+drop policy if exists "exchange_rates_owner_all" on exchange_rates;
 create policy "exchange_rates_owner_all" on exchange_rates
   for all
   using (auth.uid() = user_id)
@@ -171,7 +176,48 @@ create table if not exists net_worth_snapshots (
 
 alter table net_worth_snapshots enable row level security;
 
+drop policy if exists "net_worth_snapshots_owner_all" on net_worth_snapshots;
 create policy "net_worth_snapshots_owner_all" on net_worth_snapshots
   for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------
+-- corporate_actions: stock splits and bonus issues, applied by the app
+-- (not stored on the transaction ledger itself, which stays a faithful
+-- append-only record of what was actually bought/sold at the time).
+-- Applies to the security identified by isin (or ticker+country when no
+-- ISIN), across every family member who holds it — not per-member.
+--
+--   split: ratio_from old shares become ratio_to new shares
+--          (e.g. 1-for-5 split -> ratio_from=1, ratio_to=5)
+--   bonus: ratio_to bonus shares issued per ratio_from held
+--          (e.g. 1:1 bonus -> ratio_from=1, ratio_to=1)
+-- ---------------------------------------------------------------------
+create table if not exists corporate_actions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+
+  asset_ticker text not null,
+  isin text,
+  country text not null check (country in ('United States', 'India')),
+  action_type text not null check (action_type in ('split', 'bonus')),
+  ratio_from numeric not null check (ratio_from > 0),
+  ratio_to numeric not null check (ratio_to > 0),
+  ex_date date not null,
+  source text not null default 'manual' check (source in ('manual', 'auto')),
+
+  created_at timestamptz not null default now(),
+
+  unique (user_id, asset_ticker, country, action_type, ex_date)
+);
+
+alter table corporate_actions enable row level security;
+
+drop policy if exists "corporate_actions_owner_all" on corporate_actions;
+create policy "corporate_actions_owner_all" on corporate_actions
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create index if not exists corporate_actions_ticker_idx on corporate_actions(asset_ticker);

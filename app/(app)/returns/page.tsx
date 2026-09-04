@@ -4,16 +4,17 @@ import { computeHoldings, type Holding } from "@/lib/networth";
 import { computeXirr, buildCashflowsByCurrency } from "@/lib/xirr";
 import { computeRealizedPL, summarizeRealizedPL, summarizeDividends, type RealizedTrade } from "@/lib/realizedPL";
 import { formatINR, formatUSD, formatPercent } from "@/lib/format";
-import type { Transaction, ManualInstrument, LatestPrice, Member } from "@/lib/types";
+import type { Transaction, ManualInstrument, LatestPrice, CorporateAction, Member } from "@/lib/types";
 
 export default async function ReturnsPage() {
   const supabase = await createClient();
 
-  const [membersRes, transactions, instrumentsRes, pricesRes] = await Promise.all([
+  const [membersRes, transactions, instrumentsRes, pricesRes, corporateActions] = await Promise.all([
     supabase.from("members").select("*").order("name"),
     fetchAll<Transaction>(supabase, "transactions"),
     supabase.from("manual_instruments").select("*"),
     supabase.from("latest_prices").select("*"),
+    fetchAll<CorporateAction>(supabase, "corporate_actions"),
   ]);
 
   const members = (membersRes.data ?? []) as Member[];
@@ -30,7 +31,7 @@ export default async function ReturnsPage() {
     );
   }
 
-  const holdings = computeHoldings(transactions, prices);
+  const holdings = computeHoldings(transactions, prices, corporateActions);
 
   // ---- XIRR: family total + per member, INR and USD kept separate ----
   const familyCashflows = buildCashflowsByCurrency(transactions, instruments, holdings);
@@ -52,7 +53,7 @@ export default async function ReturnsPage() {
   });
 
   // ---- Realized P&L: FIFO, FY-wise, STCG/LTCG/VDA ----
-  const trades = computeRealizedPL(transactions);
+  const trades = computeRealizedPL(transactions, corporateActions);
   const summary = summarizeRealizedPL(trades);
   const dividends = summarizeDividends(transactions);
 

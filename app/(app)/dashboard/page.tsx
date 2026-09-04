@@ -6,7 +6,7 @@ import { refreshLivePrices } from "@/lib/actions-prices";
 import { ensureTodaySnapshot, buildNetWorthHistoryAction } from "@/lib/actions-history";
 import NetWorthTrendChart from "@/components/NetWorthTrendChart";
 import AllocationChart from "@/components/AllocationChart";
-import type { Transaction, ManualInstrument, LatestPrice, Member } from "@/lib/types";
+import type { Transaction, ManualInstrument, LatestPrice, CorporateAction, Member } from "@/lib/types";
 import Link from "next/link";
 
 export default async function DashboardPage() {
@@ -20,12 +20,13 @@ export default async function DashboardPage() {
     // ignore — dashboard should still render with whatever prices exist
   }
 
-  const [membersRes, transactions, instrumentsRes, pricesRes, rateRes] = await Promise.all([
+  const [membersRes, transactions, instrumentsRes, pricesRes, rateRes, corporateActions] = await Promise.all([
     supabase.from("members").select("*").order("name"),
     fetchAll<Transaction>(supabase, "transactions"),
     supabase.from("manual_instruments").select("*"),
     supabase.from("latest_prices").select("*"),
     supabase.from("exchange_rates").select("*").eq("pair", "USD_INR").maybeSingle(),
+    fetchAll<CorporateAction>(supabase, "corporate_actions"),
   ]);
 
   const members = (membersRes.data ?? []) as Member[];
@@ -46,7 +47,7 @@ export default async function DashboardPage() {
     );
   }
 
-  const holdings = computeHoldings(transactions, prices);
+  const holdings = computeHoldings(transactions, prices, corporateActions);
   const breakdown = computeNetWorth(holdings, instruments, usdInrRate ?? 0);
 
   const hasEquityHoldings = holdings.length > 0;

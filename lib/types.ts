@@ -60,6 +60,24 @@ export interface LatestPrice {
   updated_at: string;
 }
 
+export type CorporateActionType = "split" | "bonus";
+
+export interface CorporateAction {
+  id: string;
+  user_id: string;
+  asset_ticker: string;
+  isin: string | null;
+  country: Country;
+  action_type: CorporateActionType;
+  // split: ratio_from old shares become ratio_to new shares (e.g. 1:5 -> 1, 5)
+  // bonus: ratio_to bonus shares issued per ratio_from held (e.g. 1:1 -> 1, 1)
+  ratio_from: number;
+  ratio_to: number;
+  ex_date: string; // ISO date
+  source: "manual" | "auto";
+  created_at: string;
+}
+
 export interface ExchangeRate {
   id: string;
   user_id: string;

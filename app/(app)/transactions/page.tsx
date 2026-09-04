@@ -5,15 +5,17 @@ import MfQuickAddForm from "@/components/MfQuickAddForm";
 import TransactionsLedger from "@/components/TransactionsLedger";
 import IsinResolver from "@/components/IsinResolver";
 import BackfillNamesButton from "@/components/BackfillNamesButton";
+import CorporateActionsManager from "@/components/CorporateActionsManager";
 import { findUnresolvedTickers } from "@/lib/actions-isin";
-import type { Member, Transaction } from "@/lib/types";
+import type { Member, Transaction, CorporateAction } from "@/lib/types";
 
 export default async function TransactionsPage() {
   const supabase = await createClient();
 
-  const [membersRes, transactions] = await Promise.all([
+  const [membersRes, transactions, corporateActions] = await Promise.all([
     supabase.from("members").select("*").order("name"),
     fetchAll<Transaction>(supabase, "transactions"),
+    fetchAll<CorporateAction>(supabase, "corporate_actions"),
   ]);
 
   const members = (membersRes.data ?? []) as Member[];
@@ -210,6 +212,10 @@ export default async function TransactionsPage() {
           <IsinResolver tickers={unresolvedTickers} />
         </Section>
       )}
+
+      <Section title={`Corporate actions (${corporateActions.length})`}>
+        <CorporateActionsManager actions={corporateActions} />
+      </Section>
 
       <Section title={`Ledger (${transactions.length})`}>
         {transactions.length === 0 ? (
