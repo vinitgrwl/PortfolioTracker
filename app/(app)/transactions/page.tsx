@@ -5,6 +5,7 @@ import MfQuickAddForm from "@/components/MfQuickAddForm";
 import LedgerLoader from "@/components/LedgerLoader";
 import IsinResolver from "@/components/IsinResolver";
 import IsinConflictResolver from "@/components/IsinConflictResolver";
+import MergeSecuritiesTool from "@/components/MergeSecuritiesTool";
 import CorporateActionsLoader from "@/components/CorporateActionsLoader";
 import CompanyEventsManager from "@/components/CompanyEventsManager";
 import { findUnresolvedTickers } from "@/lib/actions-isin";
@@ -224,6 +225,10 @@ export default async function TransactionsPage() {
 
       <Section title="Fix ISIN conflicts (duplicate holdings)">
         <IsinConflictResolver />
+      </Section>
+
+      <Section title="Merge duplicate holdings manually">
+        <MergeSecuritiesTool />
       </Section>
 
       <Section title={`Corporate actions (${corpActionCount})`}>
