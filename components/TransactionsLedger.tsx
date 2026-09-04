@@ -295,6 +295,10 @@ function EditRow({ txn, members, onDone }: { txn: Transaction; members: Member[]
             <input name="sector" defaultValue={txn.sector ?? ""} className="input" />
           </EField>
 
+          <EField label="Strategy">
+            <input name="strategy" defaultValue={txn.strategy ?? ""} className="input" />
+          </EField>
+
           <EField label="Notes">
             <input name="notes" defaultValue={txn.notes ?? ""} className="input" />
           </EField>

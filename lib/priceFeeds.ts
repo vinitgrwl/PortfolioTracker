@@ -68,6 +68,58 @@ export function toYahooSymbol(ticker: string, country: "India" | "United States"
   return country === "India" ? `${t}.NS` : t;
 }
 
+export interface WatchlistQuote {
+  price: number;
+  changePercent: number | null; // vs previous close
+  fiftyTwoWeekHigh: number | null;
+  fiftyTwoWeekLow: number | null;
+  name: string | null;
+}
+
+/** Fuller quote for the Watchlist page — price, day change %, and 52-week
+ *  range. Uses a 1-year daily range so the high/low is computed from the
+ *  actual close series rather than relying on Yahoo's meta fields, which
+ *  aren't consistently present. */
+export async function fetchYahooWatchlistQuote(symbol: string): Promise<WatchlistQuote | null> {
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
+      symbol
+    )}?interval=1d&range=1y`;
+    const res = await fetch(url, { headers: YAHOO_HEADERS, cache: "no-store" });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const result = json?.chart?.result?.[0];
+    const meta = result?.meta;
+    const price = meta?.regularMarketPrice;
+    if (typeof price !== "number") return null;
+
+    const closes: (number | null)[] = result?.indicators?.quote?.[0]?.close ?? [];
+    const validCloses = closes.filter((c): c is number => typeof c === "number");
+    const fiftyTwoWeekHigh =
+      typeof meta?.fiftyTwoWeekHigh === "number"
+        ? meta.fiftyTwoWeekHigh
+        : validCloses.length > 0
+        ? Math.max(...validCloses)
+        : null;
+    const fiftyTwoWeekLow =
+      typeof meta?.fiftyTwoWeekLow === "number"
+        ? meta.fiftyTwoWeekLow
+        : validCloses.length > 0
+        ? Math.min(...validCloses)
+        : null;
+
+    const prevClose = meta?.chartPreviousClose ?? meta?.previousClose;
+    const changePercent =
+      typeof prevClose === "number" && prevClose !== 0 ? ((price - prevClose) / prevClose) * 100 : null;
+
+    const name = meta?.longName ?? meta?.shortName ?? null;
+
+    return { price, changePercent, fiftyTwoWeekHigh, fiftyTwoWeekLow, name };
+  } catch {
+    return null;
+  }
+}
+
 // ------------------------------ CoinGecko -------------------------------
 
 // Common ticker -> CoinGecko coin id. Anything not listed here falls back
@@ -128,6 +180,35 @@ export async function fetchCryptoPrices(
     }
   } catch {
     // return whatever we have (empty map) — caller treats missing as unresolved
+  }
+  return map;
+}
+
+/** Crypto quote with 24h change — used by the Watchlist page. CoinGecko's
+ *  free tier has no 52-week high/low endpoint, so watchlist crypto rows
+ *  show price + 24h change only (noted in the UI). */
+export async function fetchCryptoQuotesWithChange(
+  coinIds: string[]
+): Promise<Map<string, { usd?: number; inr?: number; usd_24h_change?: number; inr_24h_change?: number }>> {
+  const unique = Array.from(new Set(coinIds));
+  const map = new Map<
+    string,
+    { usd?: number; inr?: number; usd_24h_change?: number; inr_24h_change?: number }
+  >();
+  if (unique.length === 0) return map;
+
+  try {
+    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${unique
+      .map(encodeURIComponent)
+      .join(",")}&vs_currencies=usd,inr&include_24hr_change=true`;
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return map;
+    const json = await res.json();
+    for (const id of unique) {
+      if (json[id]) map.set(id, json[id]);
+    }
+  } catch {
+    // return whatever we have — caller treats missing as unresolved
   }
   return map;
 }

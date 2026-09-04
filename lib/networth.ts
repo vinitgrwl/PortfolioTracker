@@ -32,6 +32,7 @@ export interface Holding {
   currentPrice: number | null; // native currency, null = not entered yet
   currentValue: number | null; // native currency
   dividendTotal: number; // native currency, informational only
+  sector: string | null;
 }
 
 function holdingKeyFor(t: Pick<Transaction, "isin" | "asset_ticker" | "currency">) {
@@ -60,6 +61,7 @@ export function computeHoldings(
     country: Country;
     assetClass: AssetClass;
     dividendTotal: number;
+    sector: string | null;
   };
 
   const metaByGroup = new Map<string, Meta>();
@@ -79,11 +81,13 @@ export function computeHoldings(
         country: t.country,
         assetClass: t.asset_class,
         dividendTotal: 0,
+        sector: t.sector,
       });
     }
 
     const meta = metaByGroup.get(groupKey)!;
     if (!meta.assetName && t.asset_name) meta.assetName = t.asset_name;
+    if (!meta.sector && t.sector) meta.sector = t.sector;
 
     if (t.action === "dividend") {
       // convention: quantity = 1, price = total cash amount
@@ -121,6 +125,7 @@ export function computeHoldings(
       currentPrice,
       currentValue,
       dividendTotal: meta.dividendTotal,
+      sector: meta.sector,
     });
   }
 
@@ -190,7 +195,7 @@ export interface NetWorthBreakdown {
   byCountry: Record<string, { currentINR: number }>;
 }
 
-function toINR(nativeValue: number, currency: Currency, usdInrRate: number): number {
+export function toINR(nativeValue: number, currency: Currency, usdInrRate: number): number {
   return currency === "USD" ? nativeValue * usdInrRate : nativeValue;
 }
 

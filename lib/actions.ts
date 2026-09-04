@@ -63,6 +63,7 @@ export async function addTransaction(formData: FormData) {
     country: str(formData, "country"),
     asset_class: str(formData, "asset_class"),
     sector: optStr(formData, "sector"),
+    strategy: optStr(formData, "strategy"),
     notes: optStr(formData, "notes"),
   };
 
@@ -118,6 +119,7 @@ export async function updateTransaction(formData: FormData) {
     country: str(formData, "country"),
     asset_class: assetClass,
     sector: optStr(formData, "sector"),
+    strategy: optStr(formData, "strategy"),
     notes: optStr(formData, "notes"),
   };
 

@@ -28,6 +28,7 @@ export interface Transaction {
   country: Country;
   asset_class: AssetClass;
   sector: string | null;
+  strategy: string | null;
   notes: string | null;
   created_at: string;
 }
@@ -83,5 +84,77 @@ export interface ExchangeRate {
   user_id: string;
   pair: string; // e.g. "USD_INR"
   rate: number;
+  updated_at: string;
+}
+
+// ---------------------------------------------------------------------
+// Cash ledger
+// ---------------------------------------------------------------------
+
+export type CashAction =
+  | "deposit"
+  | "withdrawal"
+  | "transfer_send"
+  | "transfer_deposit"
+  | "interest"
+  | "fees";
+
+export interface CashTransaction {
+  id: string;
+  user_id: string;
+  member_id: string;
+  txn_date: string;
+  platform: string;
+  action: CashAction;
+  amount: number; // always positive — sign comes from `action`
+  currency: Currency;
+  transfer_group_id: string | null;
+  counterparty_platform: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+// ---------------------------------------------------------------------
+// Watchlist
+// ---------------------------------------------------------------------
+
+export type WatchlistAssetClass = "Stock" | "ETF" | "Crypto";
+
+export interface WatchlistItem {
+  id: string;
+  user_id: string;
+  asset_ticker: string;
+  asset_name: string | null;
+  country: Country;
+  asset_class: WatchlistAssetClass;
+  currency: Currency;
+  target_price: number | null;
+  notes: string | null;
+  created_at: string;
+}
+
+// ---------------------------------------------------------------------
+// Rebalancing
+// ---------------------------------------------------------------------
+
+export type RebalanceAssetClass = "Stock" | "ETF" | "Crypto" | "Mutual Fund" | "FD" | "ULIP";
+
+export interface AssetClassTarget {
+  id: string;
+  user_id: string;
+  asset_class: RebalanceAssetClass;
+  target_weight_pct: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TickerTarget {
+  id: string;
+  user_id: string;
+  asset_class: AssetClass; // Stock/ETF/Crypto/Mutual Fund only
+  asset_ticker: string;
+  isin: string | null;
+  target_weight_pct: number;
+  created_at: string;
   updated_at: string;
 }

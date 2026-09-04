@@ -172,6 +172,10 @@ export default async function TransactionsPage() {
               <input name="sector" className="input" />
             </Field>
 
+            <Field label="Strategy (optional)">
+              <input name="strategy" placeholder="Core, Swing, Long Term…" className="input" />
+            </Field>
+
             <Field label="Notes (optional)">
               <input name="notes" className="input" />
             </Field>

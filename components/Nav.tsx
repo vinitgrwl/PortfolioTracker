@@ -9,7 +9,12 @@ const LINKS = [
   { href: "/import", label: "Import" },
   { href: "/transactions", label: "Transactions" },
   { href: "/instruments", label: "FDs & ULIPs" },
+  { href: "/cash", label: "Cash" },
   { href: "/prices", label: "Prices" },
+  { href: "/watchlist", label: "Watchlist" },
+  { href: "/rebalancing", label: "Rebalancing" },
+  { href: "/sector-wise", label: "Sector" },
+  { href: "/invested-per-month", label: "Monthly" },
   { href: "/returns", label: "Returns" },
 ];
 

@@ -56,6 +56,7 @@ create table if not exists transactions (
 -- Table may already exist without this column (added after initial
 -- schema) — safe to run again if it's already there.
 alter table transactions add column if not exists asset_name text;
+alter table transactions add column if not exists strategy text;
 
 alter table transactions enable row level security;
 
@@ -221,3 +222,134 @@ create policy "corporate_actions_owner_all" on corporate_actions
   with check (auth.uid() = user_id);
 
 create index if not exists corporate_actions_ticker_idx on corporate_actions(asset_ticker);
+
+-- ---------------------------------------------------------------------
+-- cash_transactions: cash movements that are NOT a buy/sell/dividend of
+-- a security — deposits, withdrawals, cross-platform transfers, interest,
+-- and fees. Per-platform cash balance is DERIVED (never stored): it's the
+-- sum of these rows plus the cash effect of buy/sell/dividend rows in
+-- `transactions` for that platform.
+--
+-- A transfer is entered once by the user (from-platform, to-platform,
+-- amount) and recorded as two linked rows sharing `transfer_group_id` —
+-- 'transfer_send' (-amount) at the source, 'transfer_deposit' (+amount)
+-- at the destination — so the user never has to enter it twice.
+-- ---------------------------------------------------------------------
+create table if not exists cash_transactions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  member_id uuid not null references members(id) on delete cascade,
+
+  txn_date date not null,
+  platform text not null,
+  action text not null check (
+    action in ('deposit', 'withdrawal', 'transfer_send', 'transfer_deposit', 'interest', 'fees')
+  ),
+  amount numeric not null check (amount > 0), -- always positive; sign comes from `action`
+  currency text not null check (currency in ('USD', 'INR')),
+
+  transfer_group_id uuid, -- links the two rows of a transfer; null for everything else
+  counterparty_platform text, -- the other side's platform, transfers only
+
+  notes text,
+  created_at timestamptz not null default now()
+);
+
+alter table cash_transactions enable row level security;
+
+drop policy if exists "cash_transactions_owner_all" on cash_transactions;
+create policy "cash_transactions_owner_all" on cash_transactions
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create index if not exists cash_transactions_member_idx on cash_transactions(member_id);
+create index if not exists cash_transactions_platform_idx on cash_transactions(platform);
+create index if not exists cash_transactions_transfer_group_idx on cash_transactions(transfer_group_id);
+
+-- ---------------------------------------------------------------------
+-- watchlist_items: securities the user does NOT own but wants to track
+-- (price, day change). No historical storage — prices are fetched live
+-- on each page view via the same feeds used for held-asset prices.
+-- ---------------------------------------------------------------------
+create table if not exists watchlist_items (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+
+  asset_ticker text not null,
+  asset_name text,
+  country text not null check (country in ('United States', 'India')),
+  asset_class text not null check (asset_class in ('Stock', 'ETF', 'Crypto')),
+  currency text not null check (currency in ('USD', 'INR')),
+  target_price numeric, -- optional — user's own buy-below price
+
+  notes text,
+  created_at timestamptz not null default now(),
+
+  unique (user_id, asset_ticker, currency)
+);
+
+alter table watchlist_items enable row level security;
+
+drop policy if exists "watchlist_items_owner_all" on watchlist_items;
+create policy "watchlist_items_owner_all" on watchlist_items
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------
+-- Rebalancing targets — two levels, both percentages of a base:
+--   asset_class_targets: % of TOTAL portfolio value (all 5 classes sum to 100)
+--   ticker_targets:      % of that asset class's value (tickers within one
+--                         class sum to 100) — Stock/ETF/Crypto/Mutual Fund
+--                         only; FD/ULIP are tracked at class level only,
+--                         since they're a handful of manually-entered
+--                         instruments, not a ticker-identified holding.
+-- Both are shared across the family-wide/per-member view toggle — the
+-- app only computes each view differently, targets aren't duplicated.
+-- ---------------------------------------------------------------------
+create table if not exists asset_class_targets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+
+  asset_class text not null check (asset_class in ('Stock', 'ETF', 'Crypto', 'Mutual Fund', 'FD', 'ULIP')),
+  target_weight_pct numeric not null check (target_weight_pct >= 0 and target_weight_pct <= 100),
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+
+  unique (user_id, asset_class)
+);
+
+alter table asset_class_targets enable row level security;
+
+drop policy if exists "asset_class_targets_owner_all" on asset_class_targets;
+create policy "asset_class_targets_owner_all" on asset_class_targets
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create table if not exists ticker_targets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+
+  asset_class text not null check (asset_class in ('Stock', 'ETF', 'Crypto', 'Mutual Fund')),
+  asset_ticker text not null,
+  isin text,
+  target_weight_pct numeric not null check (target_weight_pct >= 0 and target_weight_pct <= 100),
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+
+  unique (user_id, asset_class, asset_ticker)
+);
+
+alter table ticker_targets enable row level security;
+
+drop policy if exists "ticker_targets_owner_all" on ticker_targets;
+create policy "ticker_targets_owner_all" on ticker_targets
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create index if not exists ticker_targets_class_idx on ticker_targets(asset_class);
