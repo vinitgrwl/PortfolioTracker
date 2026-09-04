@@ -71,13 +71,15 @@ type Event = BuySellEvent | ActionEvent;
  *
  * Split: every lot currently held gets scaled — qty *= factor,
  * costPerUnit /= factor — keeping each lot's own acquisition date, so
- * holding periods for LTCG/STCG are unaffected by a split.
+ * holding periods for LTCG/STCG are unaffected by a split. For India,
+ * the result is floored to whole shares (see the fractional-share note
+ * below); US fractional shares are left as-is.
  *
  * Bonus: existing lots are untouched. A new lot is added, dated the
  * bonus ex_date, with cost 0 — bonus shares get their own holding
  * period starting from the bonus date and (per standard tax treatment)
  * zero cost of acquisition, rather than spreading cost across all
- * shares the way a split does.
+ * shares the way a split does. For India, floored to whole shares.
  *
  * On a sell that exceeds recorded holdings (a data gap — a corporate
  * action or an import is missing), the shortfall is silently dropped
@@ -128,15 +130,30 @@ export function replayLots(
       if (ev.kind === "action") {
         const a = ev.a;
         const factor = a.ratio_to / a.ratio_from;
+        // India-listed shares can't hold a fractional quantity — a
+        // ratio like 3:1 (bonus) applied to 2 held shares would work
+        // out to 0.667 new shares, which doesn't exist. In practice the
+        // registrar rounds every shareholder down to whole shares and
+        // sells the pooled fractional remainders in the market, crediting
+        // the pro-rata cash back separately — an amount that depends on
+        // that day's market price, which isn't data this app has, so it
+        // isn't auto-generated as a transaction. We only floor the share
+        // count here; if you receive a fractional-shares payout, log it
+        // yourself under Cash → Interest. US fractional shares (Vested)
+        // are unaffected — this rounding only applies to India.
         if (a.action_type === "split") {
           for (const lot of queue) {
-            lot.qty *= factor;
-            lot.costPerUnit /= factor;
+            const originalTotalCost = lot.qty * lot.costPerUnit;
+            let newQty = lot.qty * factor;
+            if (a.country === "India") newQty = Math.floor(newQty + 1e-9);
+            lot.qty = newQty;
+            lot.costPerUnit = newQty > 1e-9 ? originalTotalCost / newQty : 0;
           }
         } else {
           // bonus — new zero-cost lot, own date, existing lots untouched
           const heldQty = queue.reduce((sum, l) => sum + l.qty, 0);
-          const bonusQty = heldQty * factor;
+          let bonusQty = heldQty * factor;
+          if (a.country === "India") bonusQty = Math.floor(bonusQty + 1e-9);
           if (bonusQty > 1e-9) {
             queue.push({ date: a.ex_date, qty: bonusQty, costPerUnit: 0 });
           }

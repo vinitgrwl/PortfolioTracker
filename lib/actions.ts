@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireUser, str, num, optStr, optNum } from "@/lib/server-utils";
+import { requireUser, str, num, optStr, optNum, fetchAll } from "@/lib/server-utils";
+import type { Transaction } from "@/lib/types";
 
 // ---------------------------------------------------------------------
 // Members
@@ -135,8 +136,19 @@ export async function updateTransaction(formData: FormData) {
 }
 
 // ---------------------------------------------------------------------
-// Manual instruments (FD / ULIP)
+// On-demand ledger load — the Transactions page used to fetchAll every
+// row (and the whole FIFO-adjacent page slowed down as the ledger grew)
+// even when the user just wanted to log a new entry or check corporate
+// actions. This is called from a button click instead, so the full
+// table read only happens when the Ledger section is actually opened.
 // ---------------------------------------------------------------------
+
+export async function fetchTransactionsForLedger(): Promise<Transaction[]> {
+  const { supabase } = await requireUser();
+  const transactions = await fetchAll<Transaction>(supabase, "transactions");
+  transactions.sort((a, b) => (a.txn_date < b.txn_date ? 1 : a.txn_date > b.txn_date ? -1 : 0));
+  return transactions;
+}
 
 export async function addInstrument(formData: FormData) {
   const { supabase, userId } = await requireUser();

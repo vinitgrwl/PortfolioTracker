@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { updateTransaction, deleteTransaction } from "@/lib/actions";
-import { formatQty } from "@/lib/format";
+import { formatQty, formatINR } from "@/lib/format";
 import type { Member, Transaction } from "@/lib/types";
 
 const ACTIONS = ["buy", "sell", "dividend"] as const;
@@ -10,9 +10,11 @@ const ACTIONS = ["buy", "sell", "dividend"] as const;
 export default function TransactionsLedger({
   transactions,
   members,
+  usdInrRate,
 }: {
   transactions: Transaction[];
   members: Member[];
+  usdInrRate: number | null;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const memberById = new Map(members.map((m) => [m.id, m.name]));
@@ -154,6 +156,7 @@ export default function TransactionsLedger({
             <th>Action</th>
             <th className="text-right">Qty</th>
             <th className="text-right">Price</th>
+            <th className="text-right">≈ INR</th>
             <th>Platform</th>
             <th></th>
           </tr>
@@ -175,6 +178,11 @@ export default function TransactionsLedger({
                 <td className="num">
                   {t.currency === "USD" ? "$" : "₹"}
                   {t.price}
+                </td>
+                <td className="num text-ink-soft">
+                  {t.currency === "USD" && usdInrRate
+                    ? formatINR(t.quantity * t.price * usdInrRate)
+                    : "—"}
                 </td>
                 <td>{t.platform}</td>
                 <td className="whitespace-nowrap">
@@ -204,7 +212,7 @@ export default function TransactionsLedger({
 function EditRow({ txn, members, onDone }: { txn: Transaction; members: Member[]; onDone: () => void }) {
   return (
     <tr>
-      <td colSpan={8} className="bg-paper px-3 py-3">
+      <td colSpan={9} className="bg-paper px-3 py-3">
         <form action={updateTransaction} className="grid grid-cols-2 md:grid-cols-4 gap-2">
           <input type="hidden" name="id" value={txn.id} />
 

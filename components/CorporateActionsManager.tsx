@@ -5,7 +5,6 @@ import {
   addCorporateAction,
   deleteCorporateAction,
   autoFetchCorporateActions,
-  fetchDhanPendingActionsAction,
   confirmPendingCorporateAction,
   dismissPendingCorporateAction,
 } from "@/lib/actions-corp-actions";
@@ -19,9 +18,7 @@ export default function CorporateActionsManager({
   pendingActions: PendingCorporateAction[];
 }) {
   const [pending, startTransition] = useTransition();
-  const [dhanPending, startDhanTransition] = useTransition();
   const [result, setResult] = useState<string | null>(null);
-  const [dhanResult, setDhanResult] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
 
   return (
@@ -30,9 +27,9 @@ export default function CorporateActionsManager({
         <p className="text-xs text-ink-soft">
           Splits and bonus issues, applied automatically to holdings and realized P&amp;L by date. US tickers
           auto-fetch reliably via Yahoo Finance. India tickers try NSE first, then Yahoo Finance as a
-          fallback for splits only (bonus issues aren&apos;t on Yahoo) — add those manually if both come up empty.
-          &ldquo;Check Dhan&rdquo; is a second India source, but only ever stages matches below for you to review
-          and confirm — its ratio direction isn&apos;t applied automatically.
+          fallback for splits only (bonus issues aren&apos;t on Yahoo), then Dhan as a third source — Dhan
+          matches only ever land in &ldquo;Pending review&rdquo; below since its ratio direction isn&apos;t
+          confirmed; everything else here applies straight away.
         </p>
         <div className="flex gap-2 shrink-0">
           <button
@@ -42,33 +39,20 @@ export default function CorporateActionsManager({
               startTransition(async () => {
                 const res = await autoFetchCorporateActions();
                 const indiaNote = res.indiaAttempted
-                  ? ` (India: NSE found ${res.indiaFound}${
+                  ? ` India: NSE found ${res.indiaFound}${
                       res.indiaFallbackUsed > 0
                         ? `, Yahoo fallback caught ${res.indiaFallbackUsed} more split(s) NSE missed`
                         : ""
-                    } — add manually for tickers still missed.)`
+                    }.`
                   : "";
-                setResult(`Checked ${res.checked} securities, added ${res.added} new action(s).${indiaNote}`);
+                const dhanNote =
+                  res.dhanChecked > 0 ? ` Dhan staged ${res.dhanStaged} new match(es) for review.` : "";
+                setResult(`Checked ${res.checked} securities, added ${res.added} new action(s).${indiaNote}${dhanNote}`);
               })
             }
             className="border border-rule px-3 py-1.5 text-xs text-ink-soft hover:text-ink disabled:opacity-60"
           >
             {pending ? "Checking…" : "Auto-fetch"}
-          </button>
-          <button
-            type="button"
-            disabled={dhanPending}
-            onClick={() =>
-              startDhanTransition(async () => {
-                const res = await fetchDhanPendingActionsAction();
-                setDhanResult(
-                  `Checked ${res.checked} India ticker(s), ${res.matched} match(es) from Dhan, ${res.added} new one(s) staged below for review.`
-                );
-              })
-            }
-            className="border border-rule px-3 py-1.5 text-xs text-ink-soft hover:text-ink disabled:opacity-60"
-          >
-            {dhanPending ? "Checking…" : "Check Dhan (India)"}
           </button>
           <button
             type="button"
@@ -81,7 +65,6 @@ export default function CorporateActionsManager({
       </div>
 
       {result && <p className="px-3 py-2 text-xs text-ink-soft border-b border-rule">{result}</p>}
-      {dhanResult && <p className="px-3 py-2 text-xs text-ink-soft border-b border-rule">{dhanResult}</p>}
 
       {showForm && (
         <form

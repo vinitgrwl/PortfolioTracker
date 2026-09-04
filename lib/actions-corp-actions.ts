@@ -58,6 +58,8 @@ export interface AutoFetchResult {
   indiaAttempted: boolean;
   indiaFound: number;
   indiaFallbackUsed: number;
+  dhanChecked: number;
+  dhanStaged: number;
 }
 
 /**
@@ -68,8 +70,11 @@ export interface AutoFetchResult {
  * can come back empty even for a stock that really did split or bonus);
  * when NSE comes back empty, Yahoo's split events are tried as a second
  * source (via the .NS symbol) — this only ever catches splits, not bonus
- * issues, since Yahoo doesn't track those. Duplicates are skipped via
- * the table's unique constraint.
+ * issues, since Yahoo doesn't track those. Finally, Dhan's scanX feed is
+ * checked too — but only ever staged in pending_corporate_actions for
+ * manual review (see fetchDhanPendingActionsAction), never inserted
+ * directly, since its ratio direction isn't confirmed from documentation.
+ * Duplicates are skipped via each table's unique constraint.
  */
 export async function autoFetchCorporateActions(): Promise<AutoFetchResult> {
   const { supabase, userId } = await requireUser();
@@ -133,11 +138,22 @@ export async function autoFetchCorporateActions(): Promise<AutoFetchResult> {
     })
   );
 
+  const dhanResult = await fetchDhanPendingActionsAction();
+
   revalidatePath("/transactions");
   revalidatePath("/dashboard");
   revalidatePath("/returns");
 
-  return { status: "done", added, checked: securities.length, indiaAttempted, indiaFound, indiaFallbackUsed };
+  return {
+    status: "done",
+    added,
+    checked: securities.length,
+    indiaAttempted,
+    indiaFound,
+    indiaFallbackUsed,
+    dhanChecked: dhanResult.checked,
+    dhanStaged: dhanResult.added,
+  };
 }
 
 export async function listCorporateActions(): Promise<CorporateAction[]> {

@@ -2,25 +2,26 @@ import { createClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/server-utils";
 import { addMember, addTransaction, deleteMember } from "@/lib/actions";
 import MfQuickAddForm from "@/components/MfQuickAddForm";
-import TransactionsLedger from "@/components/TransactionsLedger";
+import LedgerLoader from "@/components/LedgerLoader";
 import IsinResolver from "@/components/IsinResolver";
-import BackfillNamesButton from "@/components/BackfillNamesButton";
 import CorporateActionsManager from "@/components/CorporateActionsManager";
 import { findUnresolvedTickers } from "@/lib/actions-isin";
-import type { Member, Transaction, CorporateAction, PendingCorporateAction } from "@/lib/types";
+import type { Member, CorporateAction, PendingCorporateAction, ExchangeRate } from "@/lib/types";
 
 export default async function TransactionsPage() {
   const supabase = await createClient();
 
-  const [membersRes, transactions, corporateActions, pendingCorporateActions] = await Promise.all([
+  const [membersRes, txnCountRes, corporateActions, pendingCorporateActions, rateRes] = await Promise.all([
     supabase.from("members").select("*").order("name"),
-    fetchAll<Transaction>(supabase, "transactions"),
+    supabase.from("transactions").select("id", { count: "exact", head: true }),
     fetchAll<CorporateAction>(supabase, "corporate_actions"),
     fetchAll<PendingCorporateAction>(supabase, "pending_corporate_actions"),
+    supabase.from("exchange_rates").select("*").eq("pair", "USD_INR").maybeSingle(),
   ]);
 
   const members = (membersRes.data ?? []) as Member[];
-  transactions.sort((a, b) => (a.txn_date < b.txn_date ? 1 : a.txn_date > b.txn_date ? -1 : 0));
+  const txnCount = txnCountRes.count ?? 0;
+  const usdInrRate = (rateRes.data as ExchangeRate | null)?.rate ?? null;
   const unresolvedTickers = await findUnresolvedTickers();
 
   return (
@@ -222,15 +223,8 @@ export default async function TransactionsPage() {
         <CorporateActionsManager actions={corporateActions} pendingActions={pendingCorporateActions} />
       </Section>
 
-      <Section title={`Ledger (${transactions.length})`}>
-        {transactions.length === 0 ? (
-          <p className="px-3 py-4 text-sm text-ink-soft">No transactions logged yet.</p>
-        ) : (
-          <>
-            <BackfillNamesButton missingCount={transactions.filter((t) => !t.asset_name).length} />
-            <TransactionsLedger transactions={transactions} members={members} />
-          </>
-        )}
+      <Section title={`Ledger (${txnCount})`}>
+        <LedgerLoader members={members} usdInrRate={usdInrRate} approxCount={txnCount} />
       </Section>
     </div>
   );
