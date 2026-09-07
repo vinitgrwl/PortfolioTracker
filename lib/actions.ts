@@ -170,7 +170,7 @@ export async function addInstrument(formData: FormData) {
     notes: optStr(formData, "notes"),
   };
 
-  if (!row.member_id || !row.label || !row.invested_amount) {
+  if (!row.member_id || !row.label || row.invested_amount <= 0) {
     throw new Error("Missing required fields");
   }
 
@@ -200,7 +200,7 @@ export async function updateInstrument(formData: FormData) {
     updated_at: new Date().toISOString(),
   };
 
-  if (!id || !row.member_id || !row.label || !row.invested_amount) {
+  if (!id || !row.member_id || !row.label || row.invested_amount <= 0) {
     throw new Error("Missing required fields");
   }
 
@@ -266,7 +266,7 @@ export async function upsertPrice(formData: FormData) {
     updated_at: new Date().toISOString(),
   };
 
-  if (!row.asset_ticker || !row.currency || !row.current_price) {
+  if (!row.asset_ticker || !row.currency || row.current_price <= 0) {
     throw new Error("Missing required fields");
   }
 
@@ -297,7 +297,7 @@ export async function deletePrice(formData: FormData) {
 export async function upsertExchangeRate(formData: FormData) {
   const { supabase, userId } = await requireUser();
   const rate = num(formData, "rate");
-  if (!rate) throw new Error("Rate is required");
+  if (rate <= 0) throw new Error("Rate is required");
 
   const { error } = await supabase.from("exchange_rates").upsert(
     {

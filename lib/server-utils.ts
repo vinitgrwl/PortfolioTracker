@@ -64,7 +64,13 @@ export function str(formData: FormData, key: string): string {
 
 export function num(formData: FormData, key: string): number {
   const v = str(formData, key);
-  return v === "" ? 0 : Number(v);
+  if (v === "") return 0;
+  const n = Number(v);
+  // Number("abc") is NaN, and Postgres `numeric` accepts 'NaN' — letting it
+  // through would silently poison every downstream aggregate (holdings, net
+  // worth, XIRR). Treat unparseable input as a hard error instead.
+  if (!Number.isFinite(n)) throw new Error(`"${key}" must be a number`);
+  return n;
 }
 
 export function optStr(formData: FormData, key: string): string | null {
@@ -74,7 +80,10 @@ export function optStr(formData: FormData, key: string): string | null {
 
 export function optNum(formData: FormData, key: string): number | null {
   const v = str(formData, key);
-  return v === "" ? null : Number(v);
+  if (v === "") return null;
+  const n = Number(v);
+  if (!Number.isFinite(n)) throw new Error(`"${key}" must be a number`);
+  return n;
 }
 
 // ---------------------------------------------------------------------
